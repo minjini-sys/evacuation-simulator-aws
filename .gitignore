@@ -118,3 +118,12 @@ cache/
 # =========================
 *.local
 config.local.*
+
+# =========================
+# 12) Chroma / RAG artifacts
+# =========================
+chroma_hs_rules_db/
+*.sqlite3
+*.db
+*.zip
+*.pdf
