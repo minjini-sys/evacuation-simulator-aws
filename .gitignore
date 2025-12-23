@@ -1,0 +1,120 @@
+# =========================
+# 0) venv (ABC_practice 가상환경 이름)
+# =========================
+/ABC_practice/
+
+
+venv/
+.venv/
+*venv*/
+*env*/
+
+# =========================
+# 1) Secrets / Env (절대 올리면 안 됨)
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# 2) Certificates / keys (절대 올리면 안 됨)
+# =========================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# =========================
+# 3) Python cache / compiled
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# 4) Virtual environments (혹시 다른 이름 대비)
+# =========================
+.venv/
+venv/
+ENV/
+env/
+pip-wheel-metadata/
+pythonenv*/
+.poetry/
+Pipfile.lock
+
+# =========================
+# 5) Logs / temp / runtime
+# =========================
+*.log
+logs/
+*.tmp
+*.temp
+*.swp
+
+# =========================
+# 6) OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+
+# =========================
+# 7) Node.js (의존성 폴더는 절대 올리지 않음)
+# =========================
+node_modules/
+.npm/
+.npmrc.local
+.pnpm-store/
+.pnp.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# 8) Build / distribution
+# =========================
+build/
+dist/
+*.egg-info/
+
+# =========================
+# 9) ML / Model artifacts (대용량/바이너리)
+# =========================
+*.h5
+*.task
+*.tflite
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.pkl
+*.joblib
+*.gguf
+*.ggml
+
+# =========================
+# 10) Data / outputs (대용량 폴더들)
+# =========================
+data/
+dataset/
+datasets/
+outputs/
+results/
+runs/
+checkpoints/
+models/
+weights/
+cache/
+
+# =========================
+# 11) Local config (개인 설정 파일)
+# =========================
+*.local
+config.local.*
