@@ -175,7 +175,7 @@ def run(model: str, num_hands: int,
           if text_y < 0:
             text_y = y_max_px + text_height
           
-          if temp_data != category_name:
+          if category_name is not None and temp_data != category_name:
             print(category_name)
             send_cin("gesture",str(category_name))
             temp_data = category_name
