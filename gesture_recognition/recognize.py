@@ -177,7 +177,7 @@ def run(model: str, num_hands: int,
           
           if temp_data != category_name:
             print(category_name)
-            send_cin("",str(category_name))
+            send_cin("gesture",str(category_name))
             temp_data = category_name
 
           # Draw the text
