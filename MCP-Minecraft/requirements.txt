@@ -1,7 +1,0 @@
-mcp
-mcpi
-paho-mqtt
-requests
-python-dotenv
-openai
-google-generativeai>=0.8.3
