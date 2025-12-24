@@ -20,8 +20,17 @@ DB_PATH = os.path.join(PERSIST_DIR, "chroma.sqlite3")
 
 db_exists = os.path.exists(DB_PATH)
 
+# 임베딩 모델 (DB 생성/로드 시 반드시 동일해야 함)
+embeddings = HuggingFaceEmbeddings(
+    model_name="jhgan/ko-sroberta-multitask"
+)
+
 if db_exists:
     print("기존에 생성한 Vector DB가 존재합니다.")
+    vectorstore = Chroma(
+        persist_directory=PERSIST_DIR,
+        embedding_function=embeddings,
+    )
 else:
     print("기존에 생성한 Vector DB가 존재하지 않습니다.")
     print("PDF 파일들을 Load 하여 새로운 Vector DB를 생성합니다.")
@@ -78,7 +87,6 @@ else:
     print("[임베딩] 청크를 벡터로 변환(임베딩) 및 벡터 데이터베이스에 저장")
 
     # 임베딩 모델 설정 (한국어 모델 사용)
-    embeddings = HuggingFaceEmbeddings(model_name="jhgan/ko-sroberta-multitask")
 
     print("[임베딩] 벡터 DB 저장 시작.. (오래 걸림)")
     vectorstore = Chroma.from_documents(
