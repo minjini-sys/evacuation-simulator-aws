@@ -35,18 +35,9 @@ else:
     print("기존에 생성한 Vector DB가 존재하지 않습니다.")
     print("PDF 파일들을 Load 하여 새로운 Vector DB를 생성합니다.")
     print("PDF 파일 로드 시작")
-    data_hs_rule_2_01  = PyMuPDFLoader("./자연재해대책법 시행규칙 (1).pdf").load()
-    data_hs_rule_2_02  = PyMuPDFLoader("./자연재해대책법 시행규칙 (2).pdf").load()
-    data_hs_rule_4_51  = PyMuPDFLoader("./자연재해대책법 시행규칙 (3).pdf").load()
-    data_hs_rule_4_82  = PyMuPDFLoader("./자연재해대책법 시행규칙 (4).pdf").load()
-    data_hs_rule_4_107 = PyMuPDFLoader("./자연재해대책법 시행규칙 (5).pdf").load()
+    data_hs_rule_2_01  = PyMuPDFLoader("./자연재해대책법 시행규칙 (2).pdf").load()
+    data_hs_rule_2_02  = PyMuPDFLoader("./안전보건교육 교재_한국에스웨이_10월 자료.pdf").load()
     print("PDF 파일 로드 완료")
-
-    # print(data_hs_rule_2_01)
-    # print(data_hs_rule_2_02)
-    # print(data_hs_rule_4_51)
-    # print(data_hs_rule_4_82)
-    # print(data_hs_rule_4_107)
 
     print("[청킹] 변환된 텍스트를 청킹(Chunking)하여 문서 조각(청크) 생성")
 
@@ -58,9 +49,6 @@ else:
 
     chunks_hs_rule_2_01  = text_splitter.split_documents(data_hs_rule_2_01)
     chunks_hs_rule_2_02  = text_splitter.split_documents(data_hs_rule_2_02)
-    chunks_hs_rule_4_51  = text_splitter.split_documents(data_hs_rule_4_51)
-    chunks_hs_rule_4_82  = text_splitter.split_documents(data_hs_rule_4_82)
-    chunks_hs_rule_4_107 = text_splitter.split_documents(data_hs_rule_4_107)
 
     print("[청크 머지] 텍스트 데이터로 변환된 청크들을 모두 합치기")
 
@@ -68,9 +56,6 @@ else:
     all_chunks = (
         chunks_hs_rule_2_01
         + chunks_hs_rule_2_02
-        + chunks_hs_rule_4_51
-        + chunks_hs_rule_4_82
-        + chunks_hs_rule_4_107
     )
 
     # 결과 출력
@@ -109,7 +94,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 chat_model = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash", 
+    model="models/gemini-1.5-pro-002", 
     temperature=0,)
 
 # 프롬프트 템플릿 정의
@@ -159,4 +144,4 @@ def query_with_rag_stream(question: str):
     print()
     print("="*30)
 
-
+query_with_rag_invoke("화재시 행동요령 알려줘")
