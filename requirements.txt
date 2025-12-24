@@ -1,5 +1,0 @@
-numpy==1.24.3
-mediapipe==0.10.9
-mcpi
-requests
-paho-mqtt
