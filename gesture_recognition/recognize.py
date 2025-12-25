@@ -224,30 +224,30 @@ def main():
       '--model',
       help='Name of gesture recognition model.',
       required=False,
-      default='gesture_recognizer.task')
+      default='gesture_recognizer.task') #모델 파일 이름
   parser.add_argument(
       '--numHands',
       help='Max number of hands that can be detected by the recognizer.',
       required=False,
-      default=1)
+      default=1) #인식할 손 개수
   parser.add_argument(
       '--minHandDetectionConfidence',
       help='The minimum confidence score for hand detection to be considered '
            'successful.',
       required=False,
-      default=0.7)
+      default=0.7) #손 감지 신뢰도
   parser.add_argument(
       '--minHandPresenceConfidence',
       help='The minimum confidence score of hand presence score in the hand '
            'landmark detection.',
       required=False,
-      default=0.5)
+      default=0.5) #손 존재 신뢰도
   parser.add_argument(
       '--minTrackingConfidence',
       help='The minimum confidence score for the hand tracking to be '
            'considered successful.',
       required=False,
-      default=0.7)
+      default=0.7) #손 추적 신뢰도
   # Finding the camera ID can be very reliant on platform-dependent methods.
   # One common approach is to use the fact that camera IDs are usually indexed sequentially by the OS, starting from 0.
   # Here, we use OpenCV and create a VideoCapture object for each potential ID with 'cap = cv2.VideoCapture(i)'.

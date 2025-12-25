@@ -98,13 +98,13 @@ async def main():
         # 지금은 수업용으로 '모름'으로 두고, 대화 과정에서 확인하도록 설정되어 있다.
         #
         # try:
-        #     res = await mcp.read_resource("mobius://emotion/current")
+        #     res = await mcp.read_resource("mobius://gesture/current")
         #     init_val = res.contents[0].text
-        #     state_msg = f"현재 감정 상태(Resource): {init_val}"
+        #     state_msg = f"현재 제스처 상태(Resource): {init_val}"
         #     print(f"[System] {state_msg}")
         # except Exception:
-        #     state_msg = "현재 감정 상태: 확인 불가"
-        state_msg = "현재 감정 상태: 모름 (대화 중 확인 필요)"
+        #     state_msg = "현재 제스처 상태: 확인 불가"
+        state_msg = "현재 제스처 상태: 모름 (대화 중 확인 필요)"
 
         # -------------------------------------------------
         # 3. Gemini 구성
@@ -125,7 +125,7 @@ async def main():
 
         [지침]
         - 사용자의 의도를 파악하고 적절한 도구(Tool)를 사용해.
-        - '감정 표현' 요청 시 'express_emotion_workflow'를 참고해.
+        - '제스처 표현' 요청 시 'express_gesture_workflow'를 참고해.
         """
 
         # 도구 스키마 변환 및 등록
