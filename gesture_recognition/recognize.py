@@ -70,6 +70,8 @@ def run(model: str, num_hands: int,
   """
 
   temp_data = ""
+  last_send_time = 0
+  cooldown_duration = 2 # seconds, adjust as needed
 
   # Start capturing video input from the camera
   cap = cv2.VideoCapture(camera_id)
@@ -175,10 +177,11 @@ def run(model: str, num_hands: int,
           if text_y < 0:
             text_y = y_max_px + text_height
           
-          if category_name is not None and temp_data != category_name:
+          if category_name != "None" and temp_data != category_name and (time.time() - last_send_time) > cooldown_duration:   
             print(category_name)
             send_cin("gesture",str(category_name))
             temp_data = category_name
+            last_send_time = time.time()
 
           # Draw the text
           cv2.putText(current_frame, result_text, (text_x, text_y),
@@ -232,7 +235,7 @@ def main():
       help='The minimum confidence score for hand detection to be considered '
            'successful.',
       required=False,
-      default=0.5)
+      default=0.7)
   parser.add_argument(
       '--minHandPresenceConfidence',
       help='The minimum confidence score of hand presence score in the hand '
@@ -244,7 +247,7 @@ def main():
       help='The minimum confidence score for the hand tracking to be '
            'considered successful.',
       required=False,
-      default=0.5)
+      default=0.7)
   # Finding the camera ID can be very reliant on platform-dependent methods.
   # One common approach is to use the fact that camera IDs are usually indexed sequentially by the OS, starting from 0.
   # Here, we use OpenCV and create a VideoCapture object for each potential ID with 'cap = cv2.VideoCapture(i)'.
