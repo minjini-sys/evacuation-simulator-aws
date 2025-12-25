@@ -43,6 +43,8 @@ pip-wheel-metadata/
 pythonenv*/
 .poetry/
 Pipfile.lock
+gesture
+llm
 
 # =========================
 # 5) Logs / temp / runtime
@@ -122,8 +124,10 @@ config.local.*
 # =========================
 # 12) Chroma / RAG artifacts
 # =========================
-chroma_hs_rules_db/
 *.sqlite3
 *.db
 *.zip
 *.pdf
+
+!/AI/chroma_hs_rules_db/chroma.sqlite3
+!/AI/chroma_hs_rules_db/**/*.bin
