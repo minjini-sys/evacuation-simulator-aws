@@ -101,8 +101,6 @@ dist/
 *.gguf
 *.ggml
 
-!gesture_recognition/gesture_recognizer.task
-
 # =========================
 # 10) Data / outputs (대용량 폴더들)
 # =========================
