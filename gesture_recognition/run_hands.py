@@ -244,9 +244,18 @@ def main():
         help='The minimum confidence score for the hand tracking to be considered successful.',
         required=False,
         default=0.5)
-    parser.add_argument('--cameraId', help='Id of camera.', required=False, default=0)
-    parser.add_argument('--frameWidth', help='Width of frame to capture from camera.', required=False, default=1280)
-    parser.add_argument('--frameHeight', help='Height of frame to capture from camera.', required=False, default=960)
+    parser.add_argument(
+        '--cameraId', help='Id of camera.', required=False, default=0)
+    parser.add_argument(
+        '--frameWidth',
+        help='Width of frame to capture from camera.',
+        required=False,
+        default=640)
+    parser.add_argument(
+        '--frameHeight',
+        help='Height of frame to capture from camera.',
+        required=False,
+        default=480)
     args = parser.parse_args()
 
     model_path = args.model
