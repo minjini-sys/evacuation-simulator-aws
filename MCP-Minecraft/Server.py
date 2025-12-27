@@ -11,7 +11,7 @@ from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData
 
 # RAG 모듈 import
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../llm"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../AI"))
 try:
     from rag import get_answer
     RAG_AVAILABLE = True
