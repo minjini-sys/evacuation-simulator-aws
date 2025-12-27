@@ -70,11 +70,6 @@ cnt_arr[count] = {};
 cnt_arr[count].parent = '/' + cse.name + '/' + ae.name;
 
 cnt_arr[count++].name = 'gesture';
-
-// cnt_arr[count] = {};
-// cnt_arr[count].parent = '/' + cse.name + '/' + ae.name;
-
-// cnt_arr[count++].name = 'emotion';
 // [수정 가이드]
 // 위 'emotion'을 여러분이 다루는 데이터 종류로 바꾸세요.
 // 예: 행동 데이터를 담는다면 -> 'Action'
@@ -93,7 +88,7 @@ cnt_arr[count++].name = 'gesture';
 // --------------------------------------- 이하 수정 불필요 ---------------------------------------------
 
 // build sub
-// count = 0;
+count = 0;
 // sub_arr[count] = {};
 // sub_arr[count].parent = '/' + cse.name + '/' + ae.name + '/' + cnt_arr[1].name;
 // sub_arr[count].name = 'sub-ctrl';
