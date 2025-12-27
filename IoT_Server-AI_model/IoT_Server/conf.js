@@ -72,7 +72,7 @@ cnt_arr[count++].name = 'hand_gestures';
 
 cnt_arr[count] = {};
 cnt_arr[count].parent = '/' + cse.name + '/' + ae.name;
-cnt_arr[count++].name = 'gestures';
+cnt_arr[count++].name = 'gesture';
 
 // cnt_arr[count] = {};
 // cnt_arr[count].parent = '/' + cse.name + '/' + ae.name;
