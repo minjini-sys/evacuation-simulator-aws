@@ -179,7 +179,13 @@ def run(model: str, num_hands: int,
                     text_x = int(min(x_coordinates) * width)
                     text_y = int(min(y_coordinates) * height) - 40 # Margin below handedness
                     
-                    handedness_category = DETECTION_RESULT[0].handedness[i][0].category_name
+                    # Swap handedness because the frame is flipped horizontally.
+                    original_handedness = DETECTION_RESULT[0].handedness[i][0].category_name
+                    if original_handedness == 'Right':
+                        handedness_category = 'Left'
+                    else:
+                        handedness_category = 'Right'
+
                     gesture_category = gesture[0].category_name
                     gesture_score = round(gesture[0].score, 2)
                     
@@ -192,7 +198,7 @@ def run(model: str, num_hands: int,
                     current_gesture = f"{handedness_category}_{gesture_category}"
                     last_gesture = temp_data.get(i)
 
-                    if gesture_category != "None" and current_gesture != last_gesture:
+                    if gesture_category not in ["None", "Closed_Fist", "ILoveYou", "Thumb_Down"] and current_gesture != last_gesture:
                         current_time = time.time()
                         if i not in last_send_time or (current_time - last_send_time.get(i, 0)) > cooldown_duration:
                             send_cin("gesture", current_gesture)
