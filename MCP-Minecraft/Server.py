@@ -250,10 +250,19 @@ def process_quiz_gesture_sync(gesture: str) -> str:
             sys.stderr.write(f"[Quiz] Stage {current_quiz_stage} 정답!\n")
             
             if current_quiz_stage == 1:
-                # Stage 1 정답 → Stage 2 좌표 전송
+                # Stage 1 정답 → 물병 지급 + Stage 2 좌표 전송
                 next_loc = stage_info["next_location"]
+                
+                # 물병 지급
+                try:
+                    mc.command("give @a minecraft:splash_potion 3")
+                    sys.stderr.write("[Quiz] 던질 수 있는 물약 3개 지급 완료\n")
+                except Exception as e:
+                    sys.stderr.write(f"[Quiz] 물약 지급 실패: {e}\n")
+                
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
                 send_chat_message(mc, "✓ [정답!] 잘하셨습니다!", color="green", bold=True)
+                send_chat_message(mc, "🎁 물병 3개를 획득했습니다!", color="aqua", bold=True)
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
                 send_chat_message(mc, "")
                 send_chat_message(mc, f"📍 다음 장소로 이동하세요:", color="yellow", bold=True)
