@@ -46,9 +46,10 @@ for var_name, var_value in required_vars:
 # ==========================================
 
 # 게임 상태 (전역)
-current_quiz_stage = 0  # 0: 대기, 1: Stage1, 2: Stage2, 3: 완료
+current_quiz_stage = 0  # 0: 대기, 1: Stage1, 1.5: Stage1 정답 후 이동 대기, 2: Stage2, 3: 완료
 chatbot_enabled = True  # AI 챗봇 활성화 여부
 chatbot_processing = False  # AI 챗봇 처리 중 플래그
+stage2_shown = False  # Stage 2 퀴즈 표시 여부
 
 # Minecraft 연결 (전역)
 mc_connection = None
@@ -79,6 +80,46 @@ def send_chat_message(mc, message: str, color: str = "white", bold: bool = False
     except Exception as e:
         sys.stderr.write(f"[MC] 채팅 전송 실패: {e}\n")
 
+def check_player_near_location(target_x: int, target_y: int, target_z: int, radius: int = 10) -> bool:
+    """플레이어가 목표 좌표 근처에 있는지 확인"""
+    try:
+        mc = get_minecraft_connection()
+        if mc is None:
+            return False
+        
+        # 플레이어 위치 가져오기 - 여러 방법 시도
+        try:
+            # 방법 1: data get 명령어
+            result = mc.command("execute as @p run data get entity @s Pos")
+            sys.stderr.write(f"[Position] RCON 응답 (method 1): {result}\n")
+            
+            # 응답 파싱: "[123.5d, 64.0d, -456.7d]" 또는 "entity has the following entity data: [...]" 형태
+            if '[' in result and ']' in result:
+                start = result.rindex('[')
+                end = result.rindex(']') + 1
+                pos_str = result[start:end]
+                # d 제거하고 파싱
+                coords = pos_str.replace('d', '').replace('[', '').replace(']', '').split(',')
+                if len(coords) >= 3:
+                    px, py, pz = float(coords[0].strip()), float(coords[1].strip()), float(coords[2].strip())
+                    
+                    # 거리 계산 (XYZ 모두 동일한 거리 체크)
+                    distance_xz = ((px - target_x)**2 + (pz - target_z)**2)**0.5
+                    distance_y = abs(py - target_y)
+                    
+                    sys.stderr.write(f"[Position] 플레이어: ({px:.1f}, {py:.1f}, {pz:.1f}), 목표: ({target_x}, {target_y}, {target_z}), 거리 XZ: {distance_xz:.1f}, Y: {distance_y:.1f}\n")
+                    
+                    # XYZ 모두 radius 이내
+                    if distance_xz <= radius and distance_y <= radius:
+                        return True
+        except Exception as e:
+            sys.stderr.write(f"[Position] Method 1 실패: {e}\n")
+        
+        return False
+    except Exception as e:
+        sys.stderr.write(f"[Position] 위치 확인 실패: {e}\n")
+        return False
+
 # 스테이지 정보
 QUIZ_STAGES = {
     1: {
@@ -92,7 +133,7 @@ QUIZ_STAGES = {
             "5번 엘리베이터를 타고 대피한다"
         ],
         "answer": 3,  # 3번 = "불이야"라고 외쳐 주변에 알린다
-        "next_location": {"x": 200, "y": 70, "z": 200}
+        "next_location": {"x": 19, "y": -60, "z": -57}
     },
     2: {
         "name": "학교 (지진 상황)",
@@ -218,7 +259,7 @@ def process_quiz_gesture_sync(gesture: str) -> str:
                 send_chat_message(mc, f"📍 다음 장소로 이동하세요:", color="yellow", bold=True)
                 send_chat_message(mc, f"   X={next_loc['x']}, Y={next_loc['y']}, Z={next_loc['z']}", color="gold")
                 send_chat_message(mc, "")
-                current_quiz_stage = 2
+                current_quiz_stage = 1.5  # 이동 대기 상태
                 return "STAGE1_CORRECT"
                 
             elif current_quiz_stage == 2:
@@ -449,6 +490,8 @@ async def start_quiz_game():
 
 async def gesture_monitor():
     """제스처 자동 감지 및 퀴즈 처리"""
+    global chatbot_enabled, stage2_shown, current_quiz_stage
+    
     last_gesture = await asyncio.to_thread(fetch_gesture_sync)
     sys.stderr.write(f"[Monitor] 초기 제스처 무시: {last_gesture}\n")
     
@@ -458,6 +501,33 @@ async def gesture_monitor():
         try:
             current_gesture = await asyncio.to_thread(fetch_gesture_sync)
             
+            # Stage 1.5: 플레이어가 목표 좌표에 도착했는지 체크 (매 루프마다 실행)
+            if current_quiz_stage == 1.5:
+                if not stage2_shown:
+                    next_loc = QUIZ_STAGES[1]["next_location"]
+                    if await asyncio.to_thread(check_player_near_location, next_loc['x'], next_loc['y'], next_loc['z'], 3):
+                        sys.stderr.write("[Monitor] 플레이어가 Stage 2 위치 도착! 퀴즈 표시\n")
+                        try:
+                            mc = get_minecraft_connection()
+                            if mc is not None:
+                                stage2 = QUIZ_STAGES[2]
+                                send_chat_message(mc, "")
+                                send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                                send_chat_message(mc, "📍 도착! Stage 2 시작합니다", color="green", bold=True)
+                                send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                                send_chat_message(mc, "")
+                                send_chat_message(mc, f"📍 STAGE {2}: {stage2['name']}", color="gold", bold=True)
+                                send_chat_message(mc, "")
+                                send_chat_message(mc, f"❓ {stage2['question']}", color="yellow", bold=True)
+                                send_chat_message(mc, "")
+                                for option in stage2['options']:
+                                    send_chat_message(mc, f"   {option}", color="white")
+                                send_chat_message(mc, "")
+                                current_quiz_stage = 2
+                                stage2_shown = True
+                        except Exception as e:
+                            sys.stderr.write(f"[Monitor] Stage2 표시 실패: {e}\n")
+            
             # 제스처 변경 감지
             if current_gesture != last_gesture and current_gesture not in ["None", "Unknown"]:
                 sys.stderr.write(f"[Monitor] 감지: {current_gesture}\n")
@@ -465,7 +535,6 @@ async def gesture_monitor():
 
                 # Thumb_Down 제스처로 AI 챗봇 토글 (퀴즈는 계속 진행)
                 if current_gesture in ["Right_Thumb_Down", "Left_Thumb_Down"]:
-                    global chatbot_enabled
                     chatbot_enabled = not chatbot_enabled
                     sys.stderr.write(f"\n[Monitor] 👎 Thumb_Down 감지! AI 챗봇: {'활성화' if chatbot_enabled else '비활성화'}\n")
                     mc = get_minecraft_connection()
@@ -501,38 +570,16 @@ async def gesture_monitor():
                     asyncio.create_task(start_quiz_game())
                     await asyncio.sleep(1.0)
                     continue
-                    
-                # 퀴즈 진행 중일 때만 제스처 처리
-                elif current_quiz_stage > 0 and current_quiz_stage < 3:
+                
+                # 퀴즈 진행 중일 때만 제스처 처리 (Stage 1.5는 제외)
+                elif current_quiz_stage > 0 and current_quiz_stage < 3 and current_quiz_stage != 1.5:
                     result = await asyncio.to_thread(
                         process_quiz_gesture_sync, 
                         current_gesture
                     )
                     sys.stderr.write(f"[Monitor] 결과: {result}\n")
-                    
-                    # Stage 1 정답 후 Stage 2 퀴즈 표시 (UX 개선)
-                    if result == "STAGE1_CORRECT":
-                        await asyncio.sleep(3.0)  # 좌표 확인 시간
-                        try:
-                            mc = get_minecraft_connection()
-                            if mc is not None:
-                                stage2 = QUIZ_STAGES[2]
-                                send_chat_message(mc, "")
-                                send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
-                                send_chat_message(mc, f"📍 STAGE {2}: {stage2['name']}", color="gold", bold=True)
-                                send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
-                                send_chat_message(mc, "")
-                                send_chat_message(mc, f"❓ {stage2['question']}", color="yellow", bold=True)
-                                send_chat_message(mc, "")
-                                for option in stage2['options']:
-                                    send_chat_message(mc, f"   {option}", color="white")
-                                send_chat_message(mc, "")
-                            else:
-                                sys.stderr.write(f"[Monitor] Stage2 표시 실패: MC 연결 없음\n")
-                        except Exception as e:
-                            sys.stderr.write(f"[Monitor] Stage2 표시 실패: {e}\n")
             
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(2.0)
             
         except Exception as e:
             sys.stderr.write(f"[Monitor] Error: {e}\n")
