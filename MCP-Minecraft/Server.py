@@ -48,6 +48,7 @@ for var_name, var_value in required_vars:
 # 게임 상태 (전역)
 current_quiz_stage = 0  # 0: 대기, 1: Stage1, 2: Stage2, 3: 완료
 chatbot_enabled = True  # AI 챗봇 활성화 여부
+chatbot_processing = False  # AI 챗봇 처리 중 플래그
 
 # Minecraft 연결 (전역)
 mc_connection = None
@@ -339,20 +340,31 @@ def get_ai_answer(question: str) -> str:
 
 async def handle_chatbot_gesture(gesture: str):
     """Open_Palm 제스처로 AI 챗봇 호출"""
+    global current_quiz_stage, chatbot_processing
+    
+    # 이미 처리 중이면 무시
+    if chatbot_processing:
+        sys.stderr.write(f"[Chatbot] 이미 처리 중 - 중복 호출 무시\n")
+        return
+    
+    chatbot_processing = True
     sys.stderr.write(f"[Chatbot] Open_Palm 감지! 채팅 확인 중...\n")
     
-    # 최신 !질문 가져오기
-    player, question = await asyncio.to_thread(get_latest_question)
-    
-    if player and question:
-        sys.stderr.write(f"[Chatbot] 질문 발견: {player} - {question}\n")
+    try:
+        # 퀴즈 진행 중이면 stage 저장
+        saved_quiz_stage = current_quiz_stage
         
-        # LLM 호출
-        answer = await asyncio.to_thread(get_ai_answer, question)
-        sys.stderr.write(f"[Chatbot] 답변 완료\n")
+        # 최신 !질문 가져오기
+        player, question = await asyncio.to_thread(get_latest_question)
         
-        # 마인크래프트에 전송
-        try:
+        if player and question:
+            sys.stderr.write(f"[Chatbot] 질문 발견: {player} - {question}\n")
+            
+            # LLM 호출
+            answer = await asyncio.to_thread(get_ai_answer, question)
+            sys.stderr.write(f"[Chatbot] 답변 완료\n")
+            
+            # 마인크래프트에 전송
             mc = get_minecraft_connection()
             if mc:
                 send_chat_message(mc, "")
@@ -368,10 +380,23 @@ async def handle_chatbot_gesture(gesture: str):
                     send_chat_message(mc, "...(답변이 너무 길어 일부 생략됨)", color="gray")
                 send_chat_message(mc, "")
                 sys.stderr.write(f"[Chatbot] 마인크래프트에 전송 완료\n")
-        except Exception as e:
-            sys.stderr.write(f"[Chatbot] 전송 실패: {e}\n")
-    else:
-        sys.stderr.write(f"[Chatbot] 처리할 !질문이 없습니다\n")
+                
+                # 답변 완료 후 퀴즈가 진행 중이었다면 안내 메시지만 표시 (퀴즈 재표시 X)
+                if saved_quiz_stage > 0 and saved_quiz_stage < 3:
+                    send_chat_message(mc, "")
+                    send_chat_message(mc, "💡 제스처로 답을 선택해주세요!", color="yellow", bold=True)
+                    send_chat_message(mc, "")
+                    sys.stderr.write(f"[Chatbot] 퀴즈 Stage {saved_quiz_stage} 계속 진행 중\n")
+        else:
+            sys.stderr.write(f"[Chatbot] 처리할 !질문이 없습니다\n")
+    
+    except Exception as e:
+        sys.stderr.write(f"[Chatbot] 오류 발생: {e}\n")
+    
+    finally:
+        # 처리 완료
+        chatbot_processing = False
+        sys.stderr.write(f"[Chatbot] 처리 완료 - 다음 호출 가능\n")
 
 # ==========================================
 # 5. 퀴즈 시작 함수
@@ -398,13 +423,13 @@ async def start_quiz_game():
         send_chat_message(mc, "📌 제스처로 정답을 선택하세요:", color="green", bold=True)
         send_chat_message(mc, "")
         send_chat_message(mc, "   [실제 왼손]", color="aqua", bold=True)
-        send_chat_message(mc, "   ☝️ 검지 = 1번", color="white")
-        send_chat_message(mc, "   ✌️ 브이 = 2번", color="white")
+        send_chat_message(mc, "    검지 = 1번", color="white")
+        send_chat_message(mc, "    브이 = 2번", color="white")
         send_chat_message(mc, "")
         send_chat_message(mc, "   [실제 오른손]", color="yellow", bold=True)
-        send_chat_message(mc, "   ☝️ 검지 = 3번 ⭐", color="white")
-        send_chat_message(mc, "   ✌️ 브이 = 4번", color="white")
-        send_chat_message(mc, "   👍 엄지척 = 5번", color="white")
+        send_chat_message(mc, "   검지 = 3번 ⭐", color="white")
+        send_chat_message(mc, "   브이 = 4번", color="white")
+        send_chat_message(mc, "   엄지척 = 5번", color="white")
         send_chat_message(mc, "")
         send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
         send_chat_message(mc, "")
@@ -455,12 +480,19 @@ async def gesture_monitor():
 
                 # AI 챗봇 제스처 감지 (Right_Open_Palm, Left_Open_Palm)
                 if current_gesture in CHATBOT_GESTURES:
-                    if chatbot_enabled:
-                        sys.stderr.write(f"[Monitor] 챗봇 제스처 감지: {current_gesture}\n")
-                        await handle_chatbot_gesture(current_gesture)
-                        await asyncio.sleep(2.0)  # 답변 처리 대기
-                    else:
-                        sys.stderr.write(f"[Monitor] 챗봇 비활성화 상태 - Open_Palm 무시\n")
+                    if not chatbot_enabled:
+                        # 비활성화 상태에서 Open_Palm → 자동 활성화
+                        chatbot_enabled = True
+                        sys.stderr.write(f"[Monitor] 🤖 Open_Palm 감지 - AI 챗봇 자동 활성화!\n")
+                        mc = get_minecraft_connection()
+                        if mc:
+                            send_chat_message(mc, "")
+                            send_chat_message(mc, "🤖 [AI 챗봇 활성화] 질문을 처리합니다.", color="green", bold=True)
+                            send_chat_message(mc, "")
+                    
+                    sys.stderr.write(f"[Monitor] 챗봇 제스처 감지: {current_gesture}\n")
+                    await handle_chatbot_gesture(current_gesture)
+                    await asyncio.sleep(2.0)  # 답변 처리 대기
                     continue
 
                 # Left_Thumb_Up으로 퀴즈 시작 (대기 중일 때만)
