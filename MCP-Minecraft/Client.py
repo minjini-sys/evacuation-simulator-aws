@@ -34,7 +34,7 @@ class MCPClientWrapper:
         # ------------------------------------------------------------
         self.server_params = StdioServerParameters(
             command="python",  # 또는 sys.executable
-            args=[script_path],
+            args=["-X", "utf8", script_path],
         )
         self.session = None
         self._exit_stack = None

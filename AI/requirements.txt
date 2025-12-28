@@ -1,7 +1,9 @@
 python-dotenv
-
 langchain-huggingface
 langchain-chroma
 langchain-google-genai
 langchain-core
 sentence-transformers
+requests
+Flask
+mcrcon

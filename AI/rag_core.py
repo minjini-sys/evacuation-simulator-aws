@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
@@ -14,19 +15,20 @@ class RAGSystem:
     and the LLM, and providing a method to get answers.
     """
     def __init__(self):
-        print("--- RAGSystem 초기화 중: 필요한 모델과 DB를 로드합니다. (시간 소요) ---")
+        sys.stderr.write("--- RAGSystem 초기화 중: 필요한 모델과 DB를 로드합니다. (시간 소요) ---\n")
         dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'MCP-Minecraft', '.env')
         load_dotenv(dotenv_path=dotenv_path)
 
-        self.persist_dir = "./chroma_hs_rules_db"
+        rag_core_dir = os.path.dirname(os.path.abspath(__file__))
+        self.persist_dir = os.path.join(rag_core_dir, "chroma_hs_rules_db")
         self.db_path = os.path.join(self.persist_dir, "chroma.sqlite3")
 
         # Check if the database exists
         if not os.path.exists(self.db_path):
-            print("="*50)
-            print(f"오류: Vector DB를 찾을 수 없습니다. '{self.persist_dir}'")
-            print("`create_db.py` 스크립트를 실행하여 Vector DB를 먼저 생성해주세요.")
-            print("="*50)
+            sys.stderr.write("="*50 + "\n")
+            sys.stderr.write(f"오류: Vector DB를 찾을 수 없습니다. '{self.persist_dir}'\n")
+            sys.stderr.write("`create_db.py` 스크립트를 실행하여 Vector DB를 먼저 생성해주세요.\n")
+            sys.stderr.write("="*50 + "\n")
             raise FileNotFoundError(f"Vector DB not found at {self.db_path}")
 
         # Embedding model (must be the same as the one used for DB creation)
@@ -38,7 +40,7 @@ class RAGSystem:
             persist_directory=self.persist_dir,
             embedding_function=self.embeddings,
         )
-        print("--- Vector DB 로드 완료. ---")
+        sys.stderr.write("--- Vector DB 로드 완료. ---\n")
 
         # Create a retriever
         self.retriever = self.vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -78,7 +80,7 @@ class RAGSystem:
             | self.chat_model
             | StrOutputParser()
         )
-        print("--- RAGSystem 초기화 완료. ---")
+        sys.stderr.write("--- RAGSystem 초기화 완료. ---\n")
 
     def get_answer(self, question: str) -> str:
         """
