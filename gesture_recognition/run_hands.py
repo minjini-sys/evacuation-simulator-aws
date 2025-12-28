@@ -166,7 +166,11 @@ def run(model: str, num_hands: int,
                 text_y = int(min(y_coordinates) * height) - 10 # Margin
 
                 # Draw handedness
-                handedness = DETECTION_RESULT[0].handedness[i]
+                if i < len(DETECTION_RESULT[0].handedness):
+                    handedness = DETECTION_RESULT[0].handedness[i][0].category_name
+                else:
+                    handedness = "Unknown"
+
 
             
             # Draw gestures (only for gesture_recognizer)
@@ -179,16 +183,23 @@ def run(model: str, num_hands: int,
                     text_x = int(min(x_coordinates) * width)
                     text_y = int(min(y_coordinates) * height) - 40 # Margin below handedness
                     
-                    # Swap handedness because the frame is flipped horizontally.
-                    original_handedness = DETECTION_RESULT[0].handedness[i][0].category_name
-                    if original_handedness == 'Right':
-                        handedness_category = 'Left'
-                    else:
-                        handedness_category = 'Right'
 
-                    gesture_category = gesture[0].category_name
-                    gesture_score = round(gesture[0].score, 2)
-                    
+                    # handedness 안전 처리
+                    handedness_category = (
+                        DETECTION_RESULT[0].handedness[i][0].category_name
+                        if i < len(DETECTION_RESULT[0].handedness) and DETECTION_RESULT[0].handedness[i]
+                        else "Unknown"
+                    )
+
+                    # gesture 안전 처리
+                    if gesture and len(gesture) > 0:
+                        gesture_category = gesture[0].category_name
+                        gesture_score = round(gesture[0].score, 2)
+                    else:
+                        gesture_category = "None"
+                        gesture_score = 0.0
+
+
                     result_text = f'{handedness_category}: {gesture_category} ({gesture_score})'
                     cv2.putText(current_frame, result_text, (text_x, text_y),
                                 cv2.FONT_HERSHEY_DUPLEX, font_size,
@@ -198,10 +209,10 @@ def run(model: str, num_hands: int,
                     current_gesture = f"{handedness_category}_{gesture_category}"
                     last_gesture = temp_data.get(i)
 
-                    if gesture_category not in ["None", "Closed_Fist", "ILoveYou", "Thumb_Down"] and current_gesture != last_gesture:
+                    if gesture_category != "None" and current_gesture != last_gesture:
                         current_time = time.time()
                         if i not in last_send_time or (current_time - last_send_time.get(i, 0)) > cooldown_duration:
-                            send_cin("gesture", current_gesture)
+                            send_cin("hand_gestures", current_gesture)
                             last_send_time[i] = current_time
                     
                     temp_data[i] = current_gesture
