@@ -178,6 +178,7 @@ GESTURE_TO_ANSWER = {
     # Right (실제 왼손)
     "Right_Pointing_Up": 1,     # 실제 왼손 검지 = 1번
     "Right_Victory": 2,         # 실제 왼손 브이 = 2번
+    
 }
 
 # 퀴즈 시작 제스처 (카메라 반전: 실제 왼손 = Right로 인식)
@@ -244,7 +245,6 @@ def process_quiz_gesture_sync(gesture: str) -> str:
         send_chat_message(mc, "")
         send_chat_message(mc, f"🎯 [선택] {answer_num}번 선택!", color="gray", bold=True)
         send_chat_message(mc, "")
-        
         # 정답 체크
         if answer_num == correct_answer:
             sys.stderr.write(f"[Quiz] Stage {current_quiz_stage} 정답!\n")
@@ -255,14 +255,15 @@ def process_quiz_gesture_sync(gesture: str) -> str:
                 
                 # 물병 지급
                 try:
-                    mc.command("give @a minecraft:splash_potion 3")
-                    sys.stderr.write("[Quiz] 던질 수 있는 물약 3개 지급 완료\n")
+                    cmd = 'give @a minecraft:splash_potion[potion_contents={potion:"minecraft:water"}] 6'
+                    mc.command(cmd)
+                    sys.stderr.write("[Quiz 투척용 물병 6개 지급 완료\n")
                 except Exception as e:
                     sys.stderr.write(f"[Quiz] 물약 지급 실패: {e}\n")
                 
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
                 send_chat_message(mc, "✓ [정답!] 잘하셨습니다!", color="green", bold=True)
-                send_chat_message(mc, "🎁 물병 3개를 획득했습니다!", color="aqua", bold=True)
+                send_chat_message(mc, "🎁 투척용 물병 6개를 획득했습니다!", color="aqua", bold=True)
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
                 send_chat_message(mc, "")
                 send_chat_message(mc, f"📍 다음 장소로 이동하세요:", color="yellow", bold=True)
