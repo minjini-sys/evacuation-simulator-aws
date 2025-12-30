@@ -32,13 +32,16 @@ PORT = 3105
 upload_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 upload_client.connect((HOST, PORT))
 
-def send_cin(con,msg) :
 
+def send_cin(con, msg):
     cin = {'ctname': con, 'con': msg}
     msg = (json.dumps(cin) + '<EOF>')
     upload_client.sendall(msg.encode('utf-8'))
 
-    print (f"send {msg} to {con}")
+    # 너무 많은 로그는 버벅임의 원인이 될 수 있음
+    # 필요하면 아래 주석 풀어서 디버깅용으로만 사용
+    # print(f"send {msg} to {con}")
+
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
@@ -54,27 +57,32 @@ def run(model: str, num_hands: int,
         min_hand_detection_confidence: float,
         min_hand_presence_confidence: float, min_tracking_confidence: float,
         camera_id: int, width: int, height: int, task: str) -> None:
-    """Continuously run inference on images acquired from the camera.
+    """Continuously run inference on images acquired from the camera."""
 
-    Args:
-        model: Name of the model bundle.
-        num_hands: Max number of hands that can be detected.
-        min_hand_detection_confidence: The minimum confidence score for hand detection to be considered successful.
-        min_hand_presence_confidence: The minimum confidence score of hand presence score in the hand landmark detection.
-        min_tracking_confidence: The minimum confidence score for the hand tracking to be considered successful.
-        camera_id: The camera id to be passed to OpenCV.
-        width: The width of the frame captured from the camera.
-        height: The height of the frame captured from the camera.
-        task: The hand tracking task to run ('gesture_recognizer' or 'hand_landmarker').
-    """
     # Start capturing video input from the camera
-    cap = cv2.VideoCapture(camera_id)
+    cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
+    # 카메라 FPS를 낮춰서 프레임이 너무 많이 들어오는 것 방지 (선택)
+    cap.set(cv2.CAP_PROP_FPS, 15)
+    
+    # 카메라 초기화 대기 및 웜업
+    print("[INFO] 카메라 초기화 중...")
+    import time as wait_time
+    wait_time.sleep(1)
+    
+    # 카메라 웜업 -설정 때문에 처음 몇 프레임은 버림
+    print("[INFO] 카메라 웜업 중...")
+    for _ in range(5):
+        cap.read()
+        wait_time.sleep(0.1)
+    
+    print("[SUCCESS] 카메라 준비 완료!")
+
     temp_data = {}
     last_send_time = {}
-    cooldown_duration = 2 # seconds, adjust as needed
+    cooldown_duration = 2  # seconds, adjust as needed
 
     # Visualization parameters
     row_size = 50  # pixels
@@ -83,9 +91,6 @@ def run(model: str, num_hands: int,
     font_size = 1
     font_thickness = 1
     fps_avg_frame_count = 10
-    
-    # Visualization parameters for handedness.
-    handedness_text_color = (88, 205, 54) # vibrant green
 
     def save_result(result, unused_output_image, timestamp_ms):
         global FPS, COUNTER, START_TIME, DETECTION_RESULT
@@ -124,6 +129,10 @@ def run(model: str, num_hands: int,
     else:
         sys.exit(f"Invalid task: {task}")
 
+    # 프레임 스킵용 카운터 (모든 프레임을 다 인퍼런스하지 않기 위함)
+    frame_counter = 0
+    skip_interval = 2  # 2면 2프레임마다 한 번만 인퍼런스, 필요하면 3으로 올려봐도 됨
+
     # Continuously capture images from the camera and run inference
     while cap.isOpened():
         success, image = cap.read()
@@ -134,7 +143,10 @@ def run(model: str, num_hands: int,
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
 
-        detect_async_fn(mp_image, time.time_ns() // 1_000_000)
+        frame_counter += 1
+        # 🔴 모든 프레임을 보내지 않고, 일부만 MediaPipe로 보냄 → 큐가 덜 쌓임
+        if frame_counter % skip_interval == 0:
+            detect_async_fn(mp_image, time.time_ns() // 1_000_000)
 
         current_frame = image
         fps_text = 'FPS = {:.1f}'.format(FPS)
@@ -163,16 +175,8 @@ def run(model: str, num_hands: int,
                 x_coordinates = [landmark.x for landmark in hand_landmarks]
                 y_coordinates = [landmark.y for landmark in hand_landmarks]
                 text_x = int(min(x_coordinates) * width)
-                text_y = int(min(y_coordinates) * height) - 10 # Margin
+                text_y = int(min(y_coordinates) * height) - 10  # Margin
 
-                # Draw handedness
-                if i < len(DETECTION_RESULT[0].handedness):
-                    handedness = DETECTION_RESULT[0].handedness[i][0].category_name
-                else:
-                    handedness = "Unknown"
-
-
-            
             # Draw gestures (only for gesture_recognizer)
             if task == 'gesture_recognizer' and DETECTION_RESULT[0].gestures:
                 for i, gesture in enumerate(DETECTION_RESULT[0].gestures):
@@ -181,24 +185,16 @@ def run(model: str, num_hands: int,
                     x_coordinates = [landmark.x for landmark in hand_landmarks]
                     y_coordinates = [landmark.y for landmark in hand_landmarks]
                     text_x = int(min(x_coordinates) * width)
-                    text_y = int(min(y_coordinates) * height) - 40 # Margin below handedness
-                    
+                    text_y = int(min(y_coordinates) * height) - 40  # Margin below handedness
 
-                    # handedness 안전 처리
-                    handedness_category = (
-                        DETECTION_RESULT[0].handedness[i][0].category_name
-                        if i < len(DETECTION_RESULT[0].handedness) and DETECTION_RESULT[0].handedness[i]
-                        else "Unknown"
-                    )
-
-                    # gesture 안전 처리
-                    if gesture and len(gesture) > 0:
-                        gesture_category = gesture[0].category_name
-                        gesture_score = round(gesture[0].score, 2)
+                    # 안전하게 handedness 가져오기
+                    if i < len(DETECTION_RESULT[0].handedness) and DETECTION_RESULT[0].handedness[i]:
+                        handedness_category = DETECTION_RESULT[0].handedness[i][0].category_name
                     else:
-                        gesture_category = "None"
-                        gesture_score = 0.0
-
+                        handedness_category = "Unknown"
+                    
+                    gesture_category = gesture[0].category_name
+                    gesture_score = round(gesture[0].score, 2)
 
                     result_text = f'{handedness_category}: {gesture_category} ({gesture_score})'
                     cv2.putText(current_frame, result_text, (text_x, text_y),
@@ -214,9 +210,8 @@ def run(model: str, num_hands: int,
                         if i not in last_send_time or (current_time - last_send_time.get(i, 0)) > cooldown_duration:
                             send_cin("hand_gestures", current_gesture)
                             last_send_time[i] = current_time
-                    
-                    temp_data[i] = current_gesture
 
+                    temp_data[i] = current_gesture
 
         cv2.imshow('Hand Tracking', current_frame)
 
@@ -261,25 +256,17 @@ def main():
         help='The minimum confidence score for the hand tracking to be considered successful.',
         required=False,
         default=0.5)
-    parser.add_argument(
-        '--cameraId', help='Id of camera.', required=False, default=0)
-    parser.add_argument(
-        '--frameWidth',
-        help='Width of frame to capture from camera.',
-        required=False,
-        default=640)
-    parser.add_argument(
-        '--frameHeight',
-        help='Height of frame to capture from camera.',
-        required=False,
-        default=480)
+    parser.add_argument('--cameraId', help='Id of camera.', required=False, default=0)
+    # 🔴 해상도 다시 줄이기 (1280x960 → 640x480)
+    parser.add_argument('--frameWidth', help='Width of frame to capture from camera.', required=False, default=640)
+    parser.add_argument('--frameHeight', help='Height of frame to capture from camera.', required=False, default=480)
     args = parser.parse_args()
 
     model_path = args.model
     if model_path is None:
         if args.task == 'gesture_recognizer':
             model_path = 'gesture_recognizer.task'
-        else: # hand_landmarker
+        else:  # hand_landmarker
             model_path = 'hand_landmarker.task'
 
     run(model_path, int(args.numHands), float(args.minHandDetectionConfidence),
