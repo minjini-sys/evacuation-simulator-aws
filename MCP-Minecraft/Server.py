@@ -2,6 +2,8 @@ import asyncio
 import requests
 import os
 import sys
+import time
+import math
 from dotenv import load_dotenv
 from mcrcon import MCRcon
 
@@ -46,10 +48,12 @@ for var_name, var_value in required_vars:
 # ==========================================
 
 # 게임 상태 (전역)
-current_quiz_stage = 0  # 0: 대기, 1: Stage1, 1.5: Stage1 정답 후 이동 대기, 2: Stage2, 3: 완료
+current_quiz_stage = 0  # 0: 대기, 1: Stage1, 1.5: Stage1 정답 후 이동 대기, 2: Stage2, 2.5: Stage2 정답 후 안전지역 이동, 3: 완료
 chatbot_enabled = True  # AI 챗봇 활성화 여부
 chatbot_processing = False  # AI 챗봇 처리 중 플래그
 stage2_shown = False  # Stage 2 퀴즈 표시 여부
+earthquake_active = False  # 지진 활성화 여부
+game_clear_triggered = False  # 안전지역 도착 클리어 시퀀스 1회만 실행
 
 # Minecraft 연결 (전역)
 mc_connection = None
@@ -133,7 +137,7 @@ QUIZ_STAGES = {
             "5번 엘리베이터를 타고 대피한다"
         ],
         "answer": 3,  # 3번 = "불이야"라고 외쳐 주변에 알린다
-        "next_location": {"x": 19, "y": -60, "z": -57}
+        "next_location": {"x": -44, "y": -53, "z": -36}
     },
     2: {
         "name": "학교 (지진 상황)",
@@ -146,7 +150,7 @@ QUIZ_STAGES = {
             "5번 차량 안에서 대기한다"
         ],
         "answer": 3,  # 3번 = 건물과 담장에서 최대한 멀리 떨어진다
-        "next_location": None
+        "next_location": {"x": -54, "y": -60, "z": -61}
     }
 }
 
@@ -266,6 +270,8 @@ def process_quiz_gesture_sync(gesture: str) -> str:
                 send_chat_message(mc, "🎁 투척용 물병 6개를 획득했습니다!", color="aqua", bold=True)
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
                 send_chat_message(mc, "")
+                send_chat_message(mc, "💡 불을 끈 뒤 나오는 버튼을 눌러 학교 복도로 나가세요!", color="yellow", bold=True)
+                send_chat_message(mc, "")
                 send_chat_message(mc, f"📍 다음 장소로 이동하세요:", color="yellow", bold=True)
                 send_chat_message(mc, f"   X={next_loc['x']}, Y={next_loc['y']}, Z={next_loc['z']}", color="gold")
                 send_chat_message(mc, "")
@@ -273,19 +279,23 @@ def process_quiz_gesture_sync(gesture: str) -> str:
                 return "STAGE1_CORRECT"
                 
             elif current_quiz_stage == 2:
-                # Stage 2 정답 → CLEAR
+                # Stage 2 정답 → 이동 속도 버프 + 안전지역으로 이동 메시지
                 send_chat_message(mc, "")
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_chat_message(mc, "✓ [정답!] 완벽합니다!", color="green", bold=True)
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_chat_message(mc, "")
-                send_chat_message(mc, "🎉 ★★★ CLEAR ★★★ 🎉", color="gold", bold=True)
-                send_chat_message(mc, "재난 안전 교육을 완료했습니다!", color="yellow")
+                send_chat_message(mc, "⚡ 신속 효과를 받았습니다! (5초)", color="aqua", bold=True)
+                mc.command("effect give @a minecraft:speed 5 2")
+                send_chat_message(mc, "")
+                send_chat_message(mc, "🏃 지진이 발생했습니다! 빠르게 안전 지역으로 대피하세요!", color="red", bold=True)
+                send_chat_message(mc, "📍 안전 지역 좌표: X=-54, Y=-60, Z=-61", color="yellow")
                 send_chat_message(mc, "")
                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
-                current_quiz_stage = 3
-                sys.stderr.write("[Quiz] 게임 클리어!\n")
-                return "STAGE2_CLEAR"
+
+                current_quiz_stage = 2.5
+                sys.stderr.write("[Quiz] Stage 2 정답! 안전지역으로 이동 필요\n")
+                return "STAGE2_CORRECT"
         
         else:
             # 오답 → X 표시
@@ -455,9 +465,14 @@ async def handle_chatbot_gesture(gesture: str):
 
 async def start_quiz_game():
     """퀴즈 게임 시작"""
-    global current_quiz_stage
+    global current_quiz_stage, stage2_shown, earthquake_active, game_clear_triggered
     
     sys.stderr.write("[Quiz] 퀴즈 시작!\n")
+
+    # 새 게임 시작 시 플래그 초기화
+    stage2_shown = False
+    earthquake_active = False
+    game_clear_triggered = False
     
     try:
         mc = get_minecraft_connection()
@@ -500,43 +515,148 @@ async def start_quiz_game():
 
 async def gesture_monitor():
     """제스처 자동 감지 및 퀴즈 처리"""
-    global chatbot_enabled, stage2_shown, current_quiz_stage
+    global chatbot_enabled, stage2_shown, current_quiz_stage, earthquake_active, game_clear_triggered
+
+    # 폴링/체크 주기 (너무 느리면 제스처가 "늦게" 처리된 것처럼 보임)
+    gesture_poll_interval_sec = 0.2
+    location_check_interval_sec = 0.8
+    last_location_check_at = 0.0
     
     last_gesture = await asyncio.to_thread(fetch_gesture_sync)
     sys.stderr.write(f"[Monitor] 초기 제스처 무시: {last_gesture}\n")
+    # Mobius가 마지막 제스처 값을 계속 유지하는 경우(예: 시작부터 Right_Thumb_Up 고정)
+    # '변경 감지' 조건을 통과하지 못해 퀴즈 시작이 안 될 수 있어 초기값을 None으로 리셋한다.
+    last_gesture = "None"
     
     sys.stderr.write("[Monitor] 제스처 모니터링 시작...\n")
     
     while True:
         try:
             current_gesture = await asyncio.to_thread(fetch_gesture_sync)
+
+            now = time.monotonic()
             
             # Stage 1.5: 플레이어가 목표 좌표에 도착했는지 체크 (매 루프마다 실행)
             if current_quiz_stage == 1.5:
                 if not stage2_shown:
-                    next_loc = QUIZ_STAGES[1]["next_location"]
-                    if await asyncio.to_thread(check_player_near_location, next_loc['x'], next_loc['y'], next_loc['z'], 3):
-                        sys.stderr.write("[Monitor] 플레이어가 Stage 2 위치 도착! 퀴즈 표시\n")
+                    if now - last_location_check_at >= location_check_interval_sec:
+                        last_location_check_at = now
+                        next_loc = QUIZ_STAGES[1]["next_location"]
+                        if await asyncio.to_thread(check_player_near_location, next_loc['x'], next_loc['y'], next_loc['z'], 3):
+                            sys.stderr.write("[Monitor] 플레이어가 Stage 2 위치 도착! 퀴즈 표시 + 지진 시작\n")
+                            try:
+                                mc = get_minecraft_connection()
+                                if mc is not None:
+                                    # 지진 시작
+                                    mc.command("scoreboard players set #system shake 1")
+                                    earthquake_active = True
+                                    sys.stderr.write("[Monitor] 지진 시작!\n")
+
+                                    stage2 = QUIZ_STAGES[2]
+                                    send_chat_message(mc, "")
+                                    send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                                    send_chat_message(mc, "📍 도착! Stage 2 시작합니다", color="green", bold=True)
+                                    send_chat_message(mc, "🔔 지진이 발생했습니다!", color="red", bold=True)
+                                    send_chat_message(mc, "침대에서 일찍 일어난 당신  심상치 않는 진동에 일어나게 되는데", color="yellow")
+                                    send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                                    send_chat_message(mc, "")
+                                    send_chat_message(mc, f"📍 STAGE {2}: {stage2['name']}", color="gold", bold=True)
+                                    send_chat_message(mc, "")
+                                    send_chat_message(mc, f"❓ {stage2['question']}", color="yellow", bold=True)
+                                    send_chat_message(mc, "")
+                                    for option in stage2['options']:
+                                        send_chat_message(mc, f"   {option}", color="white")
+                                    send_chat_message(mc, "")
+                                    current_quiz_stage = 2
+                                    stage2_shown = True
+                            except Exception as e:
+                                sys.stderr.write(f"[Monitor] Stage2 표시 실패: {e}\n")
+            
+            # Stage 2.5: 안전지역 도착 확인
+            if current_quiz_stage == 2.5:
+                safe_zone = {"x": -54, "y": -60, "z": -61}
+                if now - last_location_check_at >= location_check_interval_sec:
+                    last_location_check_at = now
+                    if await asyncio.to_thread(check_player_near_location, safe_zone['x'], safe_zone['y'], safe_zone['z'], 3):
+                        if game_clear_triggered:
+                            await asyncio.sleep(gesture_poll_interval_sec)
+                            continue
+                        game_clear_triggered = True
+                        current_quiz_stage = 3
+                        sys.stderr.write("[Monitor] 플레이어가 안전지역 도착! 지진 종료 + 밤 + 폭죽\n")
                         try:
                             mc = get_minecraft_connection()
                             if mc is not None:
-                                stage2 = QUIZ_STAGES[2]
+                                # 지진 종료
+                                if earthquake_active:
+                                    mc.command("scoreboard players set #system shake 0")
+                                    earthquake_active = False
+                                    sys.stderr.write("[Monitor] 지진 종료!\n")
+
+                                # 밤으로 변경
+                                mc.command("time set midnight")
+                                sys.stderr.write("[Monitor] 시간대를 밤으로 변경\n")
+
+                                # 폭죽 발사
+                                # Colors는 문자열이 아니라 RGB 정수(IntArray)여야 함
+                                # (예: 빨강=0xFF0000=16711680)
+                                firework_colors = [
+                                    16711680,  # Red
+                                    16753920,  # Orange
+                                    16776960,  # Yellow
+                                    65280,     # Green
+                                    65535,     # Cyan
+                                    255,       # Blue
+                                    8388736,   # Purple
+                                    16711935,  # Magenta
+                                ]
+
+                                # 플레이어 시야 기준 '앞쪽'에 원형으로 배치 (local coords: ^left ^up ^forward)
+                                # center_forward: 플레이어 앞쪽 거리, radius: 원 반지름
+                                center_forward = 6.0
+                                radius = 3.0
+                                up = 1.0
+                                points = 12
+
+                                # 너무 빠르게 "동시에" 소환되는 느낌을 줄이기 위해 약간씩 딜레이
+                                for i in range(points):
+                                    angle = (2.0 * math.pi * i) / points
+                                    left = radius * math.cos(angle)
+                                    forward = center_forward + (radius * math.sin(angle))
+                                    color = firework_colors[i % len(firework_colors)]
+
+                                    nbt = (
+                                        "{LifeTime:40,FireworksItem:{id:\"minecraft:firework_rocket\",Count:1b,tag:{Fireworks:{Flight:2b,Explosions:[{Type:1b,Colors:[I;"
+                                        + str(color)
+                                        + "]}]}}}}"
+                                    )
+
+                                    cmd = (
+                                        "execute as @p at @s positioned ^"
+                                        + f"{left:.2f}"
+                                        + " ^"
+                                        + f"{up:.2f}"
+                                        + " ^"
+                                        + f"{forward:.2f}"
+                                        + " run summon minecraft:firework_rocket ~ ~ ~ "
+                                        + nbt
+                                    )
+                                    mc.command(cmd)
+                                    await asyncio.sleep(0.12)
+
+                                sys.stderr.write("[Monitor] 폭죽 발사 완료\n")
+
+                                # 클리어 메시지 (1회만)
                                 send_chat_message(mc, "")
                                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
-                                send_chat_message(mc, "📍 도착! Stage 2 시작합니다", color="green", bold=True)
+                                send_chat_message(mc, "🎉 ★★★ CLEAR ★★★ 🎉", color="gold", bold=True)
+                                send_chat_message(mc, "안전 지역에 도착했습니다!", color="green")
+                                send_chat_message(mc, "재난 안전 교육을 완료했습니다!", color="yellow")
+                                send_chat_message(mc, "")
                                 send_chat_message(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
-                                send_chat_message(mc, "")
-                                send_chat_message(mc, f"📍 STAGE {2}: {stage2['name']}", color="gold", bold=True)
-                                send_chat_message(mc, "")
-                                send_chat_message(mc, f"❓ {stage2['question']}", color="yellow", bold=True)
-                                send_chat_message(mc, "")
-                                for option in stage2['options']:
-                                    send_chat_message(mc, f"   {option}", color="white")
-                                send_chat_message(mc, "")
-                                current_quiz_stage = 2
-                                stage2_shown = True
+                                sys.stderr.write("[Quiz] 게임 클리어!\n")
                         except Exception as e:
-                            sys.stderr.write(f"[Monitor] Stage2 표시 실패: {e}\n")
+                            sys.stderr.write(f"[Monitor] 안전지역 처리 실패: {e}\n")
             
             # 제스처 변경 감지
             if current_gesture != last_gesture and current_gesture not in ["None", "Unknown"]:
@@ -581,19 +701,19 @@ async def gesture_monitor():
                     await asyncio.sleep(1.0)
                     continue
                 
-                # 퀴즈 진행 중일 때만 제스처 처리 (Stage 1.5는 제외)
-                elif current_quiz_stage > 0 and current_quiz_stage < 3 and current_quiz_stage != 1.5:
+                # 퀴즈 진행 중일 때만 제스처 처리 (Stage 1, 2만)
+                elif current_quiz_stage in [1, 2]:
                     result = await asyncio.to_thread(
-                        process_quiz_gesture_sync, 
+                        process_quiz_gesture_sync,
                         current_gesture
                     )
                     sys.stderr.write(f"[Monitor] 결과: {result}\n")
             
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(gesture_poll_interval_sec)
             
         except Exception as e:
             sys.stderr.write(f"[Monitor] Error: {e}\n")
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(1.0)
 
 # ==========================================
 # 6. 메인 실행
