@@ -1,7 +1,7 @@
 """
 인프라 레이어
 - Minecraft RCON 연결 및 명령어 전송
-- Mobius 제스처 폴링
+- MQTT 제스처 실시간 수신
 - Flask API 챗봇 통신
 - 메인 이벤트 루프
 """
@@ -16,7 +16,6 @@ import json
 from dotenv import load_dotenv
 from mcrcon import MCRcon
 import aiomqtt
-import aiohttp
 
 # RAG 시스템 import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'AI'))
@@ -43,7 +42,6 @@ load_dotenv()
 # MQTT 설정
 MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
-MOBIUS_CSE = os.getenv("MOBIUS_CSE", "mobius-yt")
 AE_NAME_GESTURE = os.getenv("AE_NAME_GESTURE", "ae-gesture")
 
 # MQTT Subscribe 토픽
@@ -213,9 +211,8 @@ def init_rag_system():
     global rag_system
     if rag_system is None:
         try:
-            db_path = os.path.join(os.path.dirname(__file__), "chroma_hs_rules_db")
-            rag_system = RAGSystem(persist_directory=db_path)
-            sys.stderr.write(f"[RAG] 초기화 완료: {db_path}\n")
+            rag_system = RAGSystem()
+            sys.stderr.write(f"[RAG] 초기화 완료\n")
         except Exception as e:
             sys.stderr.write(f"[RAG] 초기화 실패: {e}\n")
             rag_system = None
