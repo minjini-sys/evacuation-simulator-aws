@@ -1,4 +1,4 @@
-﻿# Copyright 2023 The MediaPipe Authors. All Rights Reserved.
+# Copyright 2023 The MediaPipe Authors. All Rights Reserved.
 # Modified by Gemini-CLI to use MQTT for publishing gestures.
 
 import argparse
@@ -15,9 +15,9 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.framework.formats import landmark_pb2
 
-# --- MQTT 諛?oneM2M ?ㅼ젙 ---
-# .env ?뚯씪?먯꽌 Mobius 愿???뺣낫瑜?媛?몄샃?덈떎.
-# .env ?뚯씪? ???ㅽ겕由쏀듃???곸쐞 ?대뜑???꾨줈?앺듃 猷⑦듃???덈떎怨?媛?뺥빀?덈떎.
+# --- MQTT 및 oneM2M 설정 ---
+# .env 파일에서 Mobius 관련 설정을 불러옵니다.
+# .env 파일은 프로젝트 루트 디렉토리(상위 폴더)에 있어야 합니다.
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
@@ -25,37 +25,37 @@ MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MOBIUS_CSE = os.getenv("MOBIUS_CSE", "mobius-yt")
 
-# ??AE(Application Entity)???대쫫. Server_MQTT.py媛 援щ룆?섎뒗 ??곴낵 愿?⑤맗?덈떎.
-# .env??AE_NAME_GESTURE ?깆쑝濡??뺤쓽?섎뒗 寃껋쓣 異붿쿇?⑸땲??
+# AE(Application Entity) 이름 - Server_MQTT.py가 구독하는 이름과 일치해야 함
+# .env 파일의 AE_NAME_GESTURE 값 사용 권장
 AE_NAME = os.getenv("AE_NAME_GESTURE", "ae-gesture") 
-# ?쒖뒪泥??곗씠?곕? ??ν븷 而⑦뀒?대꼫(CNT) ?대쫫
+# 제스처 데이터 저장용 컨테이너(CNT) 이름
 CNT_NAME = "hand_gestures"
 
-# oneM2M ?붿껌??蹂대궪 MQTT ?좏뵿
-# ?뺤떇: /oneM2M/req/{originator}/{to}/json
+# oneM2M 요청을 보낼 MQTT 토픽
+# 형식: /oneM2M/req/{originator}/{to}/json
 MQTT_REQ_TOPIC = f"/oneM2M/req/{AE_NAME}/{MOBIUS_CSE}/json"
 
-# MQTT ?대씪?댁뼵???ㅼ젙
+# MQTT 클라이언트 설정
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
 def on_connect(client, userdata, flags, rc, properties):
     if rc == 0:
-        print("[MQTT] 釉뚮줈而ㅼ뿉 ?깃났?곸쑝濡??곌껐?섏뿀?듬땲??", file=sys.stderr)
+        print("[MQTT] 브로커 연결 성공", file=sys.stderr)
     else:
-        print(f"[MQTT] 釉뚮줈而??곌껐 ?ㅽ뙣, 肄붾뱶: {rc}", file=sys.stderr)
+        print(f"[MQTT] 브로커 연결 실패 (코드: {rc})", file=sys.stderr)
 
 mqtt_client.on_connect = on_connect
 try:
     mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
-    mqtt_client.loop_start() # 諛깃렇?쇱슫?쒖뿉???ㅽ듃?뚰겕 猷⑦봽 泥섎━
+    mqtt_client.loop_start() # 백그라운드에서 네트워크 루프 처리
 except Exception as e:
-    print(f"[MQTT] MQTT ?곌껐???ㅽ뙣?덉뒿?덈떎: {e}", file=sys.stderr)
+    print(f"[MQTT] 연결 실패: {e}", file=sys.stderr)
     sys.exit(1)
 
 
 def send_cin(container_name: str, gesture_data: str):
     """
-    oneM2M??ContentInstance(cin)瑜??앹꽦?섎뒗 MQTT 硫붿떆吏瑜?寃뚯떆(Publish)?⑸땲??
+    oneM2M ContentInstance(cin)를 생성하기 위한 MQTT 메시지를 발행합니다.
     """
     global mqtt_client, AE_NAME, MOBIUS_CSE
 
@@ -75,12 +75,12 @@ def send_cin(container_name: str, gesture_data: str):
         }
     }
     
-    # MQTT ?좏뵿?쇰줈 JSON ?섏씠濡쒕뱶 寃뚯떆
+    # MQTT 토픽으로 JSON 페이로드 게시
     mqtt_client.publish(MQTT_REQ_TOPIC, json.dumps(payload))
     # print(f"Published to {MQTT_REQ_TOPIC}: {gesture_data}", file=sys.stderr)
 
 
-# --- 湲곗〈 run_hands.py 濡쒖쭅 (socket 遺遺??쒖쇅) ---
+# --- 기존 run_hands.py 로직 (socket 부분 제외) ---
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
@@ -94,14 +94,13 @@ def run(model: str, num_hands: int,
         min_hand_detection_confidence: float,
         min_hand_presence_confidence: float, min_tracking_confidence: float,
         camera_id: int, width: int, height: int, task: str) -> None:
-    # (湲곗〈 run_hands.py??run ?⑥닔? 嫄곗쓽 ?숈씪)
-    # (send_cin ?몄텧 遺遺꾨쭔 蹂寃쎈맖)
+    # 기존 run_hands.py의 run 함수와 거의 동일 (send_cin 호출 부분만 변경)
     cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     cap.set(cv2.CAP_PROP_FPS, 15)
     
-    print("[INFO] 移대찓??珥덇린???꾨즺.", file=sys.stderr)
+    print("[INFO] 카메라 초기화 완료", file=sys.stderr)
     time.sleep(1.0)
 
     temp_data = {}
@@ -150,7 +149,7 @@ def run(model: str, num_hands: int,
             detect_async_fn(mp_image, time.time_ns() // 1_000_000)
 
         current_frame = image
-        # ... (湲곗〈???붾㈃??洹몃━??濡쒖쭅? ?숈씪)
+        # ... (기존의 화면에 그리는 로직은 동일)
 
         if DETECTION_RESULT[0] and task == 'gesture_recognizer' and DETECTION_RESULT[0].gestures:
             for i, gesture in enumerate(DETECTION_RESULT[0].gestures):
@@ -167,14 +166,14 @@ def run(model: str, num_hands: int,
                 if gesture_category != "None" and current_gesture != last_gesture:
                     current_time = time.time()
                     if i not in last_send_time or (current_time - last_send_time.get(i, 0)) > cooldown_duration:
-                        # ?뵶 ?듭떖 蹂寃? ?뚯폆 ???MQTT濡??쒖뒪泥??곗씠???꾩넚
+                        # 새로운 제스처 감지 시 MQTT로 전송
                         send_cin(CNT_NAME, current_gesture)
                         print(f"MQTT Published: {current_gesture}", file=sys.stderr)
                         last_send_time[i] = current_time
 
                 temp_data[i] = current_gesture
         
-        # ... (?붾㈃??洹몃━???섎㉧吏 濡쒖쭅)
+        # ... (화면에 그리는 이미지 로직)
         cv2.imshow('Hand Tracking', image)
         if cv2.waitKey(1) == 27:
             break
@@ -182,14 +181,14 @@ def run(model: str, num_hands: int,
     detector.close()
     cap.release()
     cv2.destroyAllWindows()
-    mqtt_client.loop_stop() # ?ㅽ겕由쏀듃 醫낅즺 ??MQTT 猷⑦봽 ?뺤?
+    mqtt_client.loop_stop() # 종료 시 MQTT 루프 중지
 
 def main():
-    # (湲곗〈 run_hands.py??main ?⑥닔? ?숈씪)
+    # 기존 run_hands.py의 main 함수와 동일
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--task', help='The hand tracking task to run.', required=False, choices=['gesture_recognizer', 'hand_landmarker'], default='gesture_recognizer')
     parser.add_argument('--model', help='Name of the model bundle.', required=False, default='gesture_recognizer.task')
-    # ... (?ㅻⅨ argparse ?몄옄??
+    # ... (나머지 argparse 인자들)
     parser.add_argument('--numHands', help='Max number of hands that can be detected.', required=False, default=2)
     parser.add_argument('--minHandDetectionConfidence', help='The minimum confidence score for hand detection.', required=False, default=0.5)
     parser.add_argument('--minHandPresenceConfidence', help='The minimum confidence score of hand presence.', required=False, default=0.5)
