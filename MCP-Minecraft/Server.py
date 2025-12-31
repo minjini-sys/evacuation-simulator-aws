@@ -12,8 +12,11 @@ import os
 import sys
 import time
 import re
+import json
 from dotenv import load_dotenv
 from mcrcon import MCRcon
+import aiomqtt
+import aiohttp
 
 # RAG 시스템 import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'AI'))
@@ -37,27 +40,19 @@ load_dotenv()
 # 1. 설정
 # ==========================================
 
-MOBIUS_HOST = os.getenv("MOBIUS_HOST") 
-MOBIUS_CSE = os.getenv("MOBIUS_CSE")
-MOBIUS_AE = os.getenv("MOBIUS_AE")
-MOBIUS_ORIGIN = os.getenv("MOBIUS_ORIGIN")
-MOBIUS_PORT = int(os.getenv("MOBIUS_PORT", "7579"))
+# MQTT 설정
+MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MOBIUS_CSE = os.getenv("MOBIUS_CSE", "mobius-yt")
+AE_NAME_GESTURE = os.getenv("AE_NAME_GESTURE", "ae-gesture")
+
+# MQTT Subscribe 토픽
+MQTT_SUB_TOPIC = f"/oneM2M/req/{AE_NAME_GESTURE}/#"
+
+# Minecraft 설정
 MC_HOST = os.getenv("MC_HOST", "168.107.59.104")
 MC_RCON_PORT = int(os.getenv("MC_RCON_PORT", "25575"))
 MC_RCON_PASSWORD = os.getenv("MC_RCON_PASSWORD", "1234")
-
-# 필수 설정값 검증
-required_vars = [
-    ("MOBIUS_HOST", MOBIUS_HOST),
-    ("MOBIUS_CSE", MOBIUS_CSE),
-    ("MOBIUS_AE", MOBIUS_AE),
-    ("MOBIUS_ORIGIN", MOBIUS_ORIGIN),
-]
-
-for var_name, var_value in required_vars:
-    if not var_value:
-        sys.stderr.write(f"[Critical Error] .env 파일에 '{var_name}' 설정이 없습니다.\n")
-        sys.exit(1)
 
 # Flask API URL
 FLASK_API = os.getenv("FLASK_API", "http://168.107.59.104:5000/get_chats")
@@ -138,29 +133,67 @@ def check_player_near_location(target_x: int, target_y: int, target_z: int, radi
         return False
 
 # ==========================================
-# 3. Mobius 제스처 폴링
+# 3. MQTT 제스처 수신
 # ==========================================
 
-def fetch_gesture_sync() -> str:
-    """Mobius에서 제스처 가져오기"""
-    try:
-        url = f"http://{MOBIUS_HOST}:{MOBIUS_PORT}/{MOBIUS_CSE}/{MOBIUS_AE}/hand_gestures/la"
-        headers = {
-            "Accept": "application/json",
-            "X-M2M-RI": "12345",
-            "X-M2M-Origin": MOBIUS_ORIGIN,
-        }
-        resp = requests.get(url, headers=headers, timeout=2)
-        resp.raise_for_status()
+# 최신 제스처 저장 (전역)
+latest_gesture = "None"
+gesture_lock = asyncio.Lock()
 
-        body = resp.json()
-        cin = body.get("m2m:cin")
-        if not cin:
-            return "None"
-        return str(cin.get("con", "None"))
-    except Exception as e:
-        sys.stderr.write(f"[Fetch] Error: {e}\n")
-        return "Unknown"
+async def mqtt_gesture_listener():
+    """MQTT로부터 제스처 메시지 수신"""
+    global latest_gesture
+    
+    sys.stderr.write(f"[MQTT] 브로커 연결 중: {MQTT_HOST}:{MQTT_PORT}\n")
+    sys.stderr.write(f"[MQTT] 구독 토픽: {MQTT_SUB_TOPIC}\n")
+    
+    while True:
+        try:
+            async with aiomqtt.Client(MQTT_HOST, MQTT_PORT) as client:
+                sys.stderr.write("[MQTT] 브로커 연결 성공\n")
+                await client.subscribe(MQTT_SUB_TOPIC)
+                sys.stderr.write(f"[MQTT] 토픽 구독 완료: {MQTT_SUB_TOPIC}\n")
+                
+                async for message in client.messages:
+                    try:
+                        payload = message.payload.decode('utf-8')
+                        sys.stderr.write(f"[MQTT] 메시지 수신: {payload[:100]}...\n")
+                        
+                        # oneM2M notification 파싱
+                        data = json.loads(payload)
+                        
+                        # 제스처 데이터 추출
+                        gesture_value = None
+                        
+                        # oneM2M request 구조 파싱 (m2m:rqp)
+                        if "m2m:rqp" in data:
+                            rqp = data["m2m:rqp"]
+                            if "pc" in rqp and "m2m:cin" in rqp["pc"]:
+                                cin = rqp["pc"]["m2m:cin"]
+                                gesture_value = cin.get("con")
+                        # oneM2M notification 구조 파싱 (m2m:sgn)
+                        elif "pc" in data and "m2m:sgn" in data["pc"]:
+                            sgn = data["pc"]["m2m:sgn"]
+                            if "nev" in sgn and "rep" in sgn["nev"]:
+                                rep = sgn["nev"]["rep"]
+                                if "m2m:cin" in rep:
+                                    cin = rep["m2m:cin"]
+                                    gesture_value = cin.get("con")
+                        
+                        if gesture_value:
+                            async with gesture_lock:
+                                latest_gesture = gesture_value
+                            sys.stderr.write(f"[MQTT] 제스처 업데이트: {gesture_value}\n")
+                        
+                    except json.JSONDecodeError as e:
+                        sys.stderr.write(f"[MQTT] JSON 파싱 오류: {e}\n")
+                    except Exception as e:
+                        sys.stderr.write(f"[MQTT] 메시지 처리 오류: {e}\n")
+        
+        except Exception as e:
+            sys.stderr.write(f"[MQTT] 연결 오류: {e}\n")
+            sys.stderr.write("[MQTT] 5초 후 재연결 시도...\n")
+            await asyncio.sleep(5)
 
 # ==========================================
 # 4. AI 챗봇 통신 (Flask API + RAG)
@@ -251,37 +284,44 @@ def get_ai_answer(question: str) -> str:
 
 async def gesture_monitor():
     """제스처 자동 감지 및 게임 진행"""
-    # 폴링/체크 주기
-    gesture_poll_interval_sec = 0.1  # 0.2 → 0.1초로 단축 (더 빠른 반응)
-    location_check_interval_sec = 0.6  # 0.8 → 0.6초로 단축
+    global latest_gesture
+    
+    # 체크 주기
+    gesture_check_interval_sec = 0.05  # MQTT는 실시간이므로 체크만 빠르게
+    location_check_interval_sec = 0.6
     last_location_check_at = 0.0
     
-    last_gesture = await asyncio.to_thread(fetch_gesture_sync)
-    sys.stderr.write(f"[Monitor] 초기 제스처 무시: {last_gesture}\n")
-    last_gesture = "None"  # 초기화
+    # 초기화
+    async with gesture_lock:
+        latest_gesture = "None"
+    last_gesture = "None"
+    sys.stderr.write(f"[Monitor] 초기 제스처 무시\n")
     
-    previous_stage = 0  # Stage 변경 감지용
-    stage_transition_time = 0  # Stage 전환 시각
-    stage_cooldown = 0.5  # Stage 전환 후 0.5초 동안 제스처 무시
+    previous_stage = 0
+    stage_transition_time = 0
+    stage_cooldown = 0.5
     
     sys.stderr.write("[Monitor] 제스처 모니터링 시작...\n")
     
     while True:
         try:
-            current_gesture = await asyncio.to_thread(fetch_gesture_sync)
+            # 현재 제스처 읽기
+            async with gesture_lock:
+                current_gesture = latest_gesture
+            
             now = time.monotonic()
             
             # Stage가 변경되면 쿨다운 시작
             if game_state.current_quiz_stage != previous_stage:
-                if game_state.current_quiz_stage in [1, 2]:  # 퀴즈 Stage만
+                if game_state.current_quiz_stage in [1, 2]:
                     sys.stderr.write(f"[Monitor] Stage {previous_stage} → {game_state.current_quiz_stage} 전환: {stage_cooldown}초 쿨다운 시작\n")
                     stage_transition_time = now
-                    last_gesture = "None"  # 리셋
+                    last_gesture = "None"
                 previous_stage = game_state.current_quiz_stage
             
-            # Stage 전환 쿨다운 중이면 제스처 무시 (손 내릴 시간 주기)
+            # Stage 전환 쿨다운 중이면 제스처 무시
             if (now - stage_transition_time) < stage_cooldown:
-                await asyncio.sleep(gesture_poll_interval_sec)
+                await asyncio.sleep(gesture_check_interval_sec)
                 continue
             
             # Stage 전환 체크 (주기적으로)
@@ -307,6 +347,10 @@ async def gesture_monitor():
                 sys.stderr.write(f"[Monitor] 감지: {current_gesture}\n")
                 last_gesture = current_gesture
                 
+                # 제스처 처리 후 리셋 (중복 처리 방지)
+                async with gesture_lock:
+                    latest_gesture = "None"
+                
                 # Thumb_Down 제스처로 AI 챗봇 토글
                 if current_gesture in ["Right_Thumb_Down", "Left_Thumb_Down"]:
                     toggle_chatbot(get_minecraft_connection, send_chat_message)
@@ -323,14 +367,14 @@ async def gesture_monitor():
                         get_minecraft_connection,
                         send_chat_message
                     )
-                    await asyncio.sleep(0.5)  # 2.0 → 0.5초로 단축
+                    await asyncio.sleep(0.5)
                     continue
                 
                 # 퀴즈 시작 요청 (Left_Thumb_Up)
                 if current_gesture == START_GESTURE and game_state.current_quiz_stage == 0:
                     sys.stderr.write("[Monitor] 퀴즈 시작 요청\n")
                     asyncio.create_task(start_quiz_game(get_minecraft_connection, send_chat_message))
-                    await asyncio.sleep(0.3)  # 1.0 → 0.3초로 단축
+                    await asyncio.sleep(0.3)
                     continue
                 
                 # 퀴즈 진행 중 제스처 처리 (Stage 1, 2만)
@@ -343,7 +387,7 @@ async def gesture_monitor():
                     )
                     sys.stderr.write(f"[Monitor] 결과: {result}\n")
             
-            await asyncio.sleep(gesture_poll_interval_sec)
+            await asyncio.sleep(gesture_check_interval_sec)
             
         except Exception as e:
             sys.stderr.write(f"[Monitor] Error: {e}\n")
@@ -353,17 +397,30 @@ async def gesture_monitor():
 # 6. 메인 실행
 # ==========================================
 
-if __name__ == "__main__":
+async def main():
+    """MQTT 리스너와 제스처 모니터 동시 실행"""
     sys.stderr.write("\n" + "="*60 + "\n")
-    sys.stderr.write("🎮 마인크래프트 제스처 퀴즈 + AI 챗봇 시스템 시작\n")
+    sys.stderr.write("🎮 마인크래프트 제스처 퀴즈 + AI 챗봇 시스템 (MQTT 버전)\n")
     sys.stderr.write("="*60 + "\n")
-    sys.stderr.write(f"📡 Mobius: {MOBIUS_HOST}:{MOBIUS_PORT}\n")
+    sys.stderr.write(f"📡 MQTT 브로커: {MQTT_HOST}:{MQTT_PORT}\n")
+    sys.stderr.write(f"📡 구독 토픽: {MQTT_SUB_TOPIC}\n")
     sys.stderr.write(f"🎮 Minecraft: {MC_HOST}:{MC_RCON_PORT}\n")
     sys.stderr.write(f"🤖 Flask API: {FLASK_API}\n")
     sys.stderr.write("="*60 + "\n\n")
     
+    # MQTT 리스너와 제스처 모니터 병렬 실행
+    await asyncio.gather(
+        mqtt_gesture_listener(),
+        gesture_monitor()
+    )
+
+if __name__ == "__main__":
+    # Windows에서 MQTT 소켓 작업을 위해 SelectorEventLoop 사용
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
     try:
-        asyncio.run(gesture_monitor())
+        asyncio.run(main())
     except KeyboardInterrupt:
         sys.stderr.write("\n\n👋 프로그램이 정상적으로 종료되었습니다.\n")
     except Exception as e:
