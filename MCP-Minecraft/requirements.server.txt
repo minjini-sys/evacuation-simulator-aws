@@ -11,6 +11,7 @@ python-dotenv>=1.0.0
 
 # Minecraft RCON 통신
 mcrcon>=0.7.0
+aiomqtt>=1.1.0
 
 # RAG 시스템 (AI 챗봇)
 langchain>=0.1.0
