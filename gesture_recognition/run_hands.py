@@ -208,7 +208,7 @@ def run(model: str, num_hands: int,
                     if gesture_category != "None" and current_gesture != last_gesture:
                         current_time = time.time()
                         if i not in last_send_time or (current_time - last_send_time.get(i, 0)) > cooldown_duration:
-                            send_cin("hand_gestures", current_gesture)
+                            send_cin("gesture", current_gesture)
                             last_send_time[i] = current_time
 
                     temp_data[i] = current_gesture
