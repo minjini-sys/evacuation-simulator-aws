@@ -1,0 +1,29 @@
+# ==========================================
+# Server.py 실행을 위한 필수 패키지
+# ==========================================
+# 사용법:
+#   pip install -r requirements.txt
+# ==========================================
+
+# 기본 라이브러리
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Minecraft RCON 통신
+mcrcon>=0.7.0
+aiomqtt>=1.1.0
+
+# RAG 시스템 (AI 챗봇)
+langchain>=0.1.0
+langchain-huggingface>=0.0.1
+langchain-chroma>=0.1.0
+langchain-google-genai>=0.0.5
+langchain-core>=0.1.0
+chromadb>=0.4.0
+
+# HuggingFace 임베딩 모델
+sentence-transformers>=2.2.0
+transformers>=4.35.0
+
+# Google Gemini API
+google-generativeai>=0.8.3
