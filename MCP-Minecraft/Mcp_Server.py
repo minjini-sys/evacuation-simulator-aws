@@ -316,6 +316,9 @@ async def gesture_monitor():
                     sys.stderr.write(f"[Monitor] Stage {previous_stage} → {game_state.current_quiz_stage} 전환: {stage_cooldown}초 쿨다운 시작\n")
                     stage_transition_time = now
                     last_gesture = "None"
+                    # Stage 전환 시 이전 제스처 초기화 (중복 처리 방지)
+                    async with gesture_lock:
+                        latest_gesture = "None"
                 previous_stage = game_state.current_quiz_stage
             
             # Stage 전환 쿨다운 중이면 제스처 무시
