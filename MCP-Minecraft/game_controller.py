@@ -78,8 +78,8 @@ GESTURE_TO_ANSWER = {
     "Right_Victory": 2,      # 실제 왼손 브이 = 2번
 }
 
-START_GESTURE =  ["Right_Open_Palm", "Left_Open_Palm"]  # 실제 왼손 또는 오른손 손바닥으로 퀴즈 시작
-CHATBOT_GESTURES ="Right_Thumb_Up"  # 실제 왼손 엄지척으로 챗봇 시작
+START_GESTURE = ["Right_Open_Palm", "Left_Open_Palm"]  # 실제 왼손 또는 오른손 손바닥으로 퀴즈 시작
+CHATBOT_GESTURES = ["Right_Thumb_Up"]  # 실제 왼손 엄지척으로 챗봇 시작 (카메라 반전)
 
 # ==========================================
 # 퀴즈 로직

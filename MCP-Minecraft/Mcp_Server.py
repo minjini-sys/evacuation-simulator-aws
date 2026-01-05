@@ -40,12 +40,13 @@ load_dotenv()
 # ==========================================
 
 # MQTT 설정
-MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
+MQTT_HOST = os.getenv("MQTT_HOST", "158.179.161.105")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 AE_NAME_GESTURE = os.getenv("AE_NAME_GESTURE", "ae-gesture")
 
-# MQTT Subscribe 토픽 (모든 oneM2M 요청 수신)
-MQTT_SUB_TOPIC = "/oneM2M/req/#"
+# MQTT Subscribe 토픽
+# Mobius가 브로드캐스트하는 notification 수신
+MQTT_SUB_TOPIC = "/oneM2M/req/+/Mobius/#"
 
 # Minecraft 설정
 MC_HOST = os.getenv("MC_HOST", "168.107.59.104")
@@ -87,7 +88,7 @@ def send_chat_message(mc, message: str, color: str = "white", bold: bool = False
         color_code = color_map.get(color.lower(), "white")
         bold_tag = '"bold":true,' if bold else ''
         
-        escaped = message.replace('"', '\\"').replace('\\', '\\\\')
+        escaped = message.replace('\\', '\\\\').replace('"', '\\"')
         cmd = f'tellraw @a [{{"text":"{escaped}","color":"{color_code}",{bold_tag}"italic":false}}]'
         mc.command(cmd)
     except Exception as e:
@@ -372,8 +373,8 @@ async def gesture_monitor():
                     await asyncio.sleep(0.5)
                     continue
                 
-                # 퀴즈 시작 요청 (Left_Thumb_Up)
-                if current_gesture == START_GESTURE and game_state.current_quiz_stage == 0:
+                # 퀴즈 시작 요청 (Open_Palm)
+                if current_gesture in START_GESTURE and game_state.current_quiz_stage == 0:
                     sys.stderr.write("[Monitor] 퀴즈 시작 요청\n")
                     asyncio.create_task(start_quiz_game(get_minecraft_connection, send_chat_message))
                     await asyncio.sleep(0.3)
