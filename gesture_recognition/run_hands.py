@@ -131,7 +131,7 @@ def run(model: str, num_hands: int,
 
     # 프레임 스킵용 카운터 (모든 프레임을 다 인퍼런스하지 않기 위함)
     frame_counter = 0
-    skip_interval = 2  # 2면 2프레임마다 한 번만 인퍼런스, 필요하면 3으로 올려봐도 됨
+    skip_interval = 3  # 2면 2프레임마다 한 번만 인퍼런스, 필요하면 3으로 올려봐도 됨
 
     # Continuously capture images from the camera and run inference
     while cap.isOpened():

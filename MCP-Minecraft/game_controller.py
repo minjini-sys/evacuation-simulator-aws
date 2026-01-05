@@ -71,15 +71,19 @@ QUIZ_STAGES = {
 
 # 제스처 매핑 (카메라 좌우반전 고려)
 GESTURE_TO_ANSWER = {
-    "Left_Pointing_Up": 3,   # 실제 오른손 검지 = 3번
-    "Left_Victory": 4,       # 실제 오른손 브이 = 4번
-    "Left_Thumb_Up": 5,      # 실제 오른손 엄지척 = 5번
-    "Right_Pointing_Up": 1,  # 실제 왼손 검지 = 1번
-    "Right_Victory": 2,      # 실제 왼손 브이 = 2번
+    "Left_Pointing_Up": 3,    # 실제 오른손 검지 = 3번
+    "Left_Victory": 4,        # 실제 오른손 브이 = 4번
+    "Right_Open_Palm": 5,     # 실제 왼손 손바닥 펴기 = 5번
+    "Right_Pointing_Up": 1,   # 실제 왼손 검지 = 1번
+    "Right_Victory": 2,       # 실제 왼손 브이 = 2번
 }
 
-START_GESTURE = ["Right_Open_Palm", "Left_Open_Palm"]  # 실제 왼손 또는 오른손 손바닥으로 퀴즈 시작
-CHATBOT_GESTURES = ["Right_Thumb_Up"]  # 실제 왼손 엄지척으로 챗봇 시작 (카메라 반전)
+# 실제 오른손 손바닥 펴기(멈춰!)로 퀴즈 시작
+START_GESTURE = "Left_Open_Palm"
+
+# 실제 왼손 엄지척으로 AI 챗봇 호출
+CHATBOT_GESTURES = ["Right_Thumb_Up"]
+
 
 # ==========================================
 # 퀴즈 로직
@@ -116,7 +120,7 @@ def process_quiz_gesture(gesture: str, get_connection_func, send_message_func) -
     Returns: 처리 결과 문자열
     """
     # 퀴즈 시작 요청
-    if gesture in START_GESTURE and game_state.current_quiz_stage == 0:
+    if gesture == START_GESTURE and game_state.current_quiz_stage == 0:
         return "START_REQUESTED"
     
     # 퀴즈 진행 중이 아니면 무시
@@ -177,14 +181,14 @@ def process_quiz_gesture(gesture: str, get_connection_func, send_message_func) -
             elif game_state.current_quiz_stage == 2:
                 # Stage 2 정답 → 이동 속도 버프 + 안전지역으로 이동 메시지
                 send_message_func(mc, "")
-                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
+                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_message_func(mc, "✓ [정답!] 완벽합니다!", color="green", bold=True)
-                send_message_func(mc, "⚡ 신속 효과를 받았습니다! (5초)", color="aqua", bold=True)
-                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
-                mc.command("effect give @a minecraft:speed 5 1")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_message_func(mc, "")
-                send_message_func(mc, "🏃 지진이 발생했습니다! 빠르게 안전 지역으로 대피하세요!", color="yellow")
+                send_message_func(mc, "⚡ 신속 효과를 받았습니다! (5초)", color="aqua", bold=True)
+                mc.command("effect give @a minecraft:speed 5 1")
+                send_message_func(mc, "")
+                send_message_func(mc, "🏃 지진이 발생했습니다! 빠르게 안전 지역으로 대피하세요!", color="red", bold=True)
                 send_message_func(mc, "📍 안전 지역 좌표: X=-54, Y=-60, Z=-61", color="yellow")
                 send_message_func(mc, "")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
@@ -236,11 +240,11 @@ async def start_quiz_game(get_connection_func, send_message_func):
         send_message_func(mc, "   [실제 왼손]", color="aqua", bold=True)
         send_message_func(mc, "    검지 = 1번", color="white")
         send_message_func(mc, "    브이 = 2번", color="white")
+        send_message_func(mc, "    손바닥 펴기 = 5번", color="white")
         send_message_func(mc, "")
         send_message_func(mc, "   [실제 오른손]", color="yellow", bold=True)
         send_message_func(mc, "   검지 = 3번 ⭐", color="white")
         send_message_func(mc, "   브이 = 4번", color="white")
-        send_message_func(mc, "   엄지척 = 5번", color="white")
         send_message_func(mc, "")
         send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
         send_message_func(mc, "")
@@ -280,6 +284,7 @@ async def check_stage2_arrival(check_location_func, get_connection_func, send_me
                 send_message_func(mc, "")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_message_func(mc, "📍 도착! Stage 2 시작합니다", color="green", bold=True)
+                send_message_func(mc, "🔔 지진이 발생했습니다!", color="red", bold=True)
                 send_message_func(mc, "침대에서 일찍 일어난 당신  심상치 않는 진동에 일어나게 되는데", color="yellow")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_message_func(mc, "")
@@ -392,14 +397,14 @@ async def check_safe_zone_arrival(check_location_func, get_connection_func, send
 
 async def handle_chatbot_gesture(gesture: str, get_question_func, get_answer_func, 
                                   get_connection_func, send_message_func):
-    """AI 챗봇 제스처 처리 (Open_Palm)"""
+    """AI 챗봇 제스처 처리 (Thumb_Up)"""
     # 이미 처리 중이면 무시
     if game_state.chatbot_processing:
         sys.stderr.write(f"[Chatbot] 이미 처리 중 - 중복 호출 무시\n")
         return
     
     game_state.chatbot_processing = True
-    sys.stderr.write(f"[Chatbot] Open_Palm 감지! 채팅 확인 중...\n")
+    sys.stderr.write(f"[Chatbot] Thumb_Up 감지! 질문 확인 중...\n")
     
     try:
         # 퀴즈 진행 중이면 stage 저장
@@ -451,7 +456,7 @@ async def handle_chatbot_gesture(gesture: str, get_question_func, get_answer_fun
 
 
 def toggle_chatbot(get_connection_func, send_message_func):
-    """챗봇 활성화/비활성화 토글"""
+    """챗봇 활성화/비활성화 토글 (Thumb_Down)"""
     game_state.chatbot_enabled = not game_state.chatbot_enabled
     sys.stderr.write(f"\n[Game] 👎 Thumb_Down 감지! AI 챗봇: {'활성화' if game_state.chatbot_enabled else '비활성화'}\n")
     
@@ -459,17 +464,17 @@ def toggle_chatbot(get_connection_func, send_message_func):
     if mc:
         send_message_func(mc, "")
         if game_state.chatbot_enabled:
-            send_message_func(mc, "🤖 [AI 챗봇 활성화] Open_Palm으로 질문하세요.", color="green", bold=True)
+            send_message_func(mc, "🤖 [AI 챗봇 활성화] 엄지(Thumb_Up)로 질문을 호출하세요.", color="green", bold=True)
         else:
             send_message_func(mc, "🚫 [AI 챗봇 비활성화] 퀴즈는 계속 진행됩니다.", color="red", bold=True)
         send_message_func(mc, "")
 
 
 def auto_enable_chatbot(get_connection_func, send_message_func):
-    """챗봇 자동 활성화 (Open_Palm 감지 시)"""
+    """챗봇 자동 활성화 (Thumb_Up 감지 시)"""
     if not game_state.chatbot_enabled:
         game_state.chatbot_enabled = True
-        sys.stderr.write(f"[Game] 🤖 Open_Palm 감지 - AI 챗봇 자동 활성화!\n")
+        sys.stderr.write(f"[Game] 🤖 Thumb_Up 감지 - AI 챗봇 자동 활성화!\n")
         
         mc = get_connection_func()
         if mc:
