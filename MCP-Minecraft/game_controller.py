@@ -78,9 +78,8 @@ GESTURE_TO_ANSWER = {
     "Right_Victory": 2,      # 실제 왼손 브이 = 2번
 }
 
-START_GESTURE = "Right_Thumb_Up"  # 실제 왼손 엄지척으로 퀴즈 시작
-CHATBOT_GESTURES = ["Right_Open_Palm", "Left_Open_Palm"]
-
+START_GESTURE =  ["Right_Open_Palm", "Left_Open_Palm"]  # 실제 왼손 또는 오른손 손바닥으로 퀴즈 시작
+CHATBOT_GESTURES ="Right_Thumb_Up"  # 실제 왼손 엄지척으로 챗봇 시작
 
 # ==========================================
 # 퀴즈 로직
@@ -117,7 +116,7 @@ def process_quiz_gesture(gesture: str, get_connection_func, send_message_func) -
     Returns: 처리 결과 문자열
     """
     # 퀴즈 시작 요청
-    if gesture == START_GESTURE and game_state.current_quiz_stage == 0:
+    if gesture in START_GESTURE and game_state.current_quiz_stage == 0:
         return "START_REQUESTED"
     
     # 퀴즈 진행 중이 아니면 무시
@@ -178,14 +177,14 @@ def process_quiz_gesture(gesture: str, get_connection_func, send_message_func) -
             elif game_state.current_quiz_stage == 2:
                 # Stage 2 정답 → 이동 속도 버프 + 안전지역으로 이동 메시지
                 send_message_func(mc, "")
-                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
                 send_message_func(mc, "✓ [정답!] 완벽합니다!", color="green", bold=True)
+                send_message_func(mc, "⚡ 신속 효과를 받았습니다! (5초)", color="aqua", bold=True)
+                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
+                mc.command("effect give @a minecraft:speed 5 1")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_message_func(mc, "")
-                send_message_func(mc, "⚡ 신속 효과를 받았습니다! (5초)", color="aqua", bold=True)
-                mc.command("effect give @a minecraft:speed 5 1")
-                send_message_func(mc, "")
-                send_message_func(mc, "🏃 지진이 발생했습니다! 빠르게 안전 지역으로 대피하세요!", color="red", bold=True)
+                send_message_func(mc, "🏃 지진이 발생했습니다! 빠르게 안전 지역으로 대피하세요!", color="yellow")
                 send_message_func(mc, "📍 안전 지역 좌표: X=-54, Y=-60, Z=-61", color="yellow")
                 send_message_func(mc, "")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
@@ -281,7 +280,6 @@ async def check_stage2_arrival(check_location_func, get_connection_func, send_me
                 send_message_func(mc, "")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_message_func(mc, "📍 도착! Stage 2 시작합니다", color="green", bold=True)
-                send_message_func(mc, "🔔 지진이 발생했습니다!", color="red", bold=True)
                 send_message_func(mc, "침대에서 일찍 일어난 당신  심상치 않는 진동에 일어나게 되는데", color="yellow")
                 send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
                 send_message_func(mc, "")
