@@ -47,7 +47,7 @@ QUIZ_STAGES = {
         "options": [
             "1번 소화기를 찾으러 간다",
             "2번 불이 난 장소를 촬영한다",
-            '3번 "불이야"라고 외쳐 주변에 알린다',
+            '3번 \"불이야\"라고 외쳐 주변에 알린다',
             "4번 창문을 닫고 연기를 막는다",
             "5번 엘리베이터를 타고 대피한다"
         ],
@@ -73,13 +73,13 @@ QUIZ_STAGES = {
 GESTURE_TO_ANSWER = {
     "Left_Pointing_Up": 3,    # 실제 오른손 검지 = 3번
     "Left_Victory": 4,        # 실제 오른손 브이 = 4번
-    "Right_Open_Palm": 5,     # 실제 왼손 손바닥 펴기 = 5번
+    "Left_Open_Palm": 5,      # 실제 오른손 손바닥 펴기 = 5번
     "Right_Pointing_Up": 1,   # 실제 왼손 검지 = 1번
     "Right_Victory": 2,       # 실제 왼손 브이 = 2번
 }
 
-# 실제 오른손 손바닥 펴기(멈춰!)로 퀴즈 시작
-START_GESTURE = "Left_Open_Palm"
+# 실제 왼손 손바닥 펴기(멈춰!)로 퀴즈 시작
+START_GESTURE = "Right_Open_Palm"
 
 # 실제 왼손 엄지척으로 AI 챗봇 호출
 CHATBOT_GESTURES = ["Right_Thumb_Up"]
@@ -181,17 +181,16 @@ def process_quiz_gesture(gesture: str, get_connection_func, send_message_func) -
             elif game_state.current_quiz_stage == 2:
                 # Stage 2 정답 → 이동 속도 버프 + 안전지역으로 이동 메시지
                 send_message_func(mc, "")
-                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
                 send_message_func(mc, "✓ [정답!] 완벽합니다!", color="green", bold=True)
-                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                send_message_func(mc, "⚡ 신속 효과를 받았습니다! (10초)", color="aqua", bold=True)
+                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
+                mc.command("effect give @a minecraft:speed 10 1")
                 send_message_func(mc, "")
-                send_message_func(mc, "⚡ 신속 효과를 받았습니다! (5초)", color="aqua", bold=True)
-                mc.command("effect give @a minecraft:speed 5 1")
-                send_message_func(mc, "")
-                send_message_func(mc, "🏃 지진이 발생했습니다! 빠르게 안전 지역으로 대피하세요!", color="red", bold=True)
+                send_message_func(mc, "🏃 지진이 발생했습니다! 빠르게 안전 지역으로 대피하세요!", color="red")
                 send_message_func(mc, "📍 안전 지역 좌표: X=-54, Y=-60, Z=-61", color="yellow")
                 send_message_func(mc, "")
-                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="gold")
+                send_message_func(mc, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", color="green")
 
                 game_state.current_quiz_stage = 2.5
                 sys.stderr.write("[Quiz] Stage 2 정답! 안전지역으로 이동 필요\n")
@@ -311,7 +310,7 @@ async def check_safe_zone_arrival(check_location_func, get_connection_func, send
         return False
     
     safe_zone = {"x": -54, "y": -60, "z": -61}
-    if await asyncio.to_thread(check_location_func, safe_zone['x'], safe_zone['y'], safe_zone['z'], 3):
+    if await asyncio.to_thread(check_location_func, safe_zone['x'], safe_zone['y'], safe_zone['z'], 2):
         game_state.game_clear_triggered = True
         game_state.current_quiz_stage = 3
         sys.stderr.write("[Game] 플레이어가 안전지역 도착! 지진 종료 + 밤 + 폭죽\n")
@@ -418,6 +417,8 @@ async def handle_chatbot_gesture(gesture: str, get_question_func, get_answer_fun
             
             # LLM 호출
             answer = await asyncio.to_thread(get_answer_func, question)
+            # LLM이 반환한 답변에서 불필요한 이스케이프 제거
+            answer = answer.replace('\\"', '"').replace("\\'", "'")
             sys.stderr.write(f"[Chatbot] 답변 완료\n")
             
             # 마인크래프트에 전송
@@ -429,8 +430,7 @@ async def handle_chatbot_gesture(gesture: str, get_question_func, get_answer_fun
                 # 답변을 60자씩 나누어 전송
                 chunks = [answer[i:i+60] for i in range(0, len(answer), 60)][:8]
                 for chunk in chunks:
-                    escaped = chunk.replace('"', '\\"').replace("'", "\\'")
-                    send_message_func(mc, escaped, color="white")
+                    send_message_func(mc, chunk, color="white")
                 
                 if len(answer) > 480:
                     send_message_func(mc, "...(답변이 너무 길어 일부 생략됨)", color="gray")
