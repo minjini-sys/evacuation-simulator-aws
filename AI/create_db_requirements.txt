@@ -3,7 +3,6 @@ dotenv
 langchain-core
 langchain-community
 langchain-text-splitters
-langchain-google-genai
 
 chromadb
 pymupdf
@@ -15,4 +14,3 @@ torch
 
 numpy
 tqdm
-google-generativeai 
