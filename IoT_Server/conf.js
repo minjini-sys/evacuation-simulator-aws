@@ -92,11 +92,18 @@ cnt_arr[count++].name = 'gesture';
 // --------------------------------------- 이하 수정 불필요 ---------------------------------------------
 
 // build sub
-// count = 0;
-// sub_arr[count] = {};
-// sub_arr[count].parent = '/' + cse.name + '/' + ae.name + '/' + cnt_arr[1].name;
-// sub_arr[count].name = 'sub-ctrl';
-// sub_arr[count++].nu = 'mqtt://' + cse.host + '/' + ae.id;
+count = 0;
+sub_arr[count] = {};
+sub_arr[count].parent = '/' + cse.name + '/' + ae.name + '/' + cnt_arr[0].name;
+sub_arr[count].name = 'sub';
+// MQTT notification으로 받기 (Mcp_Server.py가 MQTT 구독)
+sub_arr[count++].nu = 'mqtt://' + cse.host + '/' + ae.id + '?ct=' + ae.bodytype;
+
+// Mcp_Server.py를 위한 추가 subscription (브로드캐스트 토픽)
+sub_arr[count] = {};
+sub_arr[count].parent = '/' + cse.name + '/' + ae.name + '/' + cnt_arr[0].name;
+sub_arr[count].name = 'sub-mcp';
+sub_arr[count++].nu = 'mqtt://' + cse.host + '/Mobius/' + ae.name + '?ct=' + ae.bodytype;
 
 // --------
 // sub_arr[count] = {};
