@@ -9,6 +9,7 @@
 import asyncio
 import requests
 import os
+import ssl
 import sys
 import time
 import re
@@ -16,6 +17,7 @@ import json
 from dotenv import load_dotenv
 from mcrcon import MCRcon
 import aiomqtt
+from aiomqtt import TLSParameters
 
 # RAG 시스템 import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'AI'))
@@ -43,15 +45,21 @@ load_dotenv()
 MQTT_HOST = os.getenv("MQTT_HOST", "158.179.161.105")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 AE_NAME_GESTURE = os.getenv("AE_NAME_GESTURE", "ae-gesture")
+MQTT_USE_TLS = os.getenv("MQTT_USE_TLS", "false").lower() == "true"
+MQTT_CA_PATH = os.getenv("MQTT_CA_PATH")
+MQTT_CERT_PATH = os.getenv("MQTT_CERT_PATH")
+MQTT_KEY_PATH = os.getenv("MQTT_KEY_PATH")
+MQTT_USERNAME = os.getenv("MQTT_USERNAME")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 
 # MQTT Subscribe 토픽
 # Mobius가 브로드캐스트하는 notification 수신
-MQTT_SUB_TOPIC = "/oneM2M/req/+/Mobius/#"
+MQTT_SUB_TOPIC = os.getenv("MQTT_SUB_TOPIC", "/oneM2M/req/+/Mobius/#")
 
 # Minecraft 설정
 MC_HOST = os.getenv("MC_HOST", "168.107.59.104")
 MC_RCON_PORT = int(os.getenv("MC_RCON_PORT", "25575"))
-MC_RCON_PASSWORD = os.getenv("MC_RCON_PASSWORD", "1234")
+MC_RCON_PASSWORD = os.getenv("MC_RCON_PASSWORD", "")
 
 # Flask API URL
 FLASK_API = os.getenv("FLASK_API", "http://168.107.59.104:5000/get_chats")
@@ -67,6 +75,9 @@ def get_minecraft_connection():
     """Minecraft RCON 연결 가져오기"""
     global mc_connection
     try:
+        if not MC_RCON_PASSWORD:
+            sys.stderr.write("[MC] MC_RCON_PASSWORD 환경변수가 설정되지 않았습니다.\n")
+            return None
         if mc_connection is None:
             mc_connection = MCRcon(MC_HOST, MC_RCON_PASSWORD, port=MC_RCON_PORT)
             mc_connection.connect()
@@ -139,6 +150,50 @@ def check_player_near_location(target_x: int, target_y: int, target_z: int, radi
 latest_gesture = "None"
 gesture_lock = asyncio.Lock()
 
+
+def build_mqtt_client_kwargs():
+    """Build aiomqtt connection options for plain MQTT or AWS IoT Core MQTT/TLS."""
+    kwargs = {}
+    if MQTT_USERNAME:
+        kwargs["username"] = MQTT_USERNAME
+    if MQTT_PASSWORD:
+        kwargs["password"] = MQTT_PASSWORD
+    if MQTT_USE_TLS:
+        if not all([MQTT_CA_PATH, MQTT_CERT_PATH, MQTT_KEY_PATH]):
+            raise RuntimeError("MQTT_CA_PATH, MQTT_CERT_PATH, and MQTT_KEY_PATH are required when MQTT_USE_TLS=true")
+        kwargs["tls_params"] = TLSParameters(
+            ca_certs=MQTT_CA_PATH,
+            certfile=MQTT_CERT_PATH,
+            keyfile=MQTT_KEY_PATH,
+            tls_version=ssl.PROTOCOL_TLS_CLIENT,
+        )
+    return kwargs
+
+
+def extract_gesture_value(data):
+    """Extract a gesture from either Mobius oneM2M notifications or AWS IoT JSON."""
+    if not isinstance(data, dict):
+        return None
+
+    for key in ("gesture", "con", "value"):
+        if data.get(key):
+            return data[key]
+
+    if "m2m:rqp" in data:
+        rqp = data["m2m:rqp"]
+        if "pc" in rqp and "m2m:cin" in rqp["pc"]:
+            return rqp["pc"]["m2m:cin"].get("con")
+
+    if "pc" in data and "m2m:sgn" in data["pc"]:
+        sgn = data["pc"]["m2m:sgn"]
+        if "nev" in sgn and "rep" in sgn["nev"]:
+            rep = sgn["nev"]["rep"]
+            if "m2m:cin" in rep:
+                return rep["m2m:cin"].get("con")
+
+    return None
+
+
 async def mqtt_gesture_listener():
     """MQTT로부터 제스처 메시지 수신"""
     global latest_gesture
@@ -148,7 +203,7 @@ async def mqtt_gesture_listener():
     
     while True:
         try:
-            async with aiomqtt.Client(MQTT_HOST, MQTT_PORT) as client:
+            async with aiomqtt.Client(MQTT_HOST, MQTT_PORT, **build_mqtt_client_kwargs()) as client:
                 sys.stderr.write("[MQTT] 브로커 연결 성공\n")
                 await client.subscribe(MQTT_SUB_TOPIC)
                 sys.stderr.write(f"[MQTT] 토픽 구독 완료: {MQTT_SUB_TOPIC}\n")
@@ -181,6 +236,8 @@ async def mqtt_gesture_listener():
                                     cin = rep["m2m:cin"]
                                     gesture_value = cin.get("con")
                         
+                        gesture_value = gesture_value or extract_gesture_value(data)
+
                         if gesture_value:
                             async with gesture_lock:
                                 latest_gesture = gesture_value

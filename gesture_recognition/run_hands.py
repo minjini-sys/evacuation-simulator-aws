@@ -14,6 +14,8 @@
 """Main script to run hand gesture recognition and hand landmark detection."""
 
 import argparse
+import os
+import ssl
 import sys
 import time
 
@@ -21,22 +23,97 @@ import socket, json
 
 import cv2
 import mediapipe as mp
+import paho.mqtt.client as mqtt
+from dotenv import load_dotenv
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.framework.formats import landmark_pb2
 
-HOST = '127.0.0.1'
-PORT = 3105
+load_dotenv()
 
-upload_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-upload_client.connect((HOST, PORT))
+DEFAULT_TAS_HOST = os.getenv('TAS_HOST', '127.0.0.1')
+DEFAULT_TAS_PORT = int(os.getenv('TAS_PORT', '3105'))
+DEFAULT_OUTPUT_MODE = os.getenv('GESTURE_OUTPUT_MODE', 'tas')
+DEFAULT_AWS_IOT_ENDPOINT = os.getenv('AWS_IOT_ENDPOINT', '')
+DEFAULT_AWS_IOT_PORT = int(os.getenv('AWS_IOT_PORT', '8883'))
+DEFAULT_AWS_IOT_TOPIC = os.getenv('AWS_IOT_TOPIC', 'evacuation/gesture')
+DEFAULT_AWS_IOT_CLIENT_ID = os.getenv('AWS_IOT_CLIENT_ID', 'gesture-recognition-client')
 
 
-def send_cin(con, msg):
-    cin = {'ctname': con, 'con': msg}
-    msg = (json.dumps(cin) + '<EOF>')
-    upload_client.sendall(msg.encode('utf-8'))
+class TasPublisher:
+    """Publishes gestures to the local Thyme TAS TCP server."""
+
+    def __init__(self, host: str, port: int):
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect((host, port))
+        print(f"[TAS] Connected to {host}:{port}")
+
+    def publish(self, ctname: str, gesture: str):
+        cin = {'ctname': ctname, 'con': gesture}
+        message = json.dumps(cin) + '<EOF>'
+        self.client.sendall(message.encode('utf-8'))
+
+    def close(self):
+        self.client.close()
+
+
+class AwsIotPublisher:
+    """Publishes gestures directly to AWS IoT Core over MQTT/TLS."""
+
+    def __init__(self, endpoint: str, port: int, topic: str, client_id: str):
+        if not endpoint:
+            raise ValueError('AWS_IOT_ENDPOINT is required when GESTURE_OUTPUT_MODE=aws_iot')
+
+        ca_path = os.getenv('AWS_IOT_CA_PATH')
+        cert_path = os.getenv('AWS_IOT_CERT_PATH')
+        key_path = os.getenv('AWS_IOT_KEY_PATH')
+        if not all([ca_path, cert_path, key_path]):
+            raise ValueError('AWS_IOT_CA_PATH, AWS_IOT_CERT_PATH, and AWS_IOT_KEY_PATH are required')
+
+        self.topic = topic
+        self.client = mqtt.Client(client_id=client_id)
+        self.client.tls_set(
+            ca_certs=ca_path,
+            certfile=cert_path,
+            keyfile=key_path,
+            tls_version=ssl.PROTOCOL_TLS_CLIENT,
+        )
+        self.client.connect(endpoint, port, keepalive=60)
+        self.client.loop_start()
+        print(f"[AWS IoT] Connected to {endpoint}:{port}, topic={topic}")
+
+    def publish(self, ctname: str, gesture: str):
+        payload = {
+            'source': 'gesture_recognition',
+            'ctname': ctname,
+            'gesture': gesture,
+            'con': gesture,
+            'timestamp': time.time(),
+        }
+        self.client.publish(self.topic, json.dumps(payload), qos=1)
+
+    def close(self):
+        self.client.loop_stop()
+        self.client.disconnect()
+
+
+def create_publisher(args):
+    mode = args.outputMode.lower()
+    if mode == 'tas':
+        return TasPublisher(args.tasHost, int(args.tasPort))
+    if mode == 'aws_iot':
+        return AwsIotPublisher(
+            endpoint=args.awsIotEndpoint,
+            port=int(args.awsIotPort),
+            topic=args.awsIotTopic,
+            client_id=args.awsIotClientId,
+        )
+    raise ValueError(f"Unsupported output mode: {args.outputMode}")
+
+
+def send_cin(publisher, con, msg):
+    publisher.publish(con, msg)
 
     # 너무 많은 로그는 버벅임의 원인이 될 수 있음
     # 필요하면 아래 주석 풀어서 디버깅용으로만 사용
@@ -56,7 +133,7 @@ DETECTION_RESULT = [None]
 def run(model: str, num_hands: int,
         min_hand_detection_confidence: float,
         min_hand_presence_confidence: float, min_tracking_confidence: float,
-        camera_id: int, width: int, height: int, task: str) -> None:
+        camera_id: int, width: int, height: int, task: str, publisher) -> None:
     """Continuously run inference on images acquired from the camera."""
 
     # Start capturing video input from the camera
@@ -208,7 +285,7 @@ def run(model: str, num_hands: int,
                     if gesture_category != "None" and current_gesture != last_gesture:
                         current_time = time.time()
                         if i not in last_send_time or (current_time - last_send_time.get(i, 0)) > cooldown_duration:
-                            send_cin("gesture", current_gesture)
+                            send_cin(publisher, "gesture", current_gesture)
                             last_send_time[i] = current_time
 
                     temp_data[i] = current_gesture
@@ -260,6 +337,13 @@ def main():
     # 🔴 해상도 다시 줄이기 (1280x960 → 640x480)
     parser.add_argument('--frameWidth', help='Width of frame to capture from camera.', required=False, default=640)
     parser.add_argument('--frameHeight', help='Height of frame to capture from camera.', required=False, default=480)
+    parser.add_argument('--outputMode', choices=['tas', 'aws_iot'], default=DEFAULT_OUTPUT_MODE)
+    parser.add_argument('--tasHost', default=DEFAULT_TAS_HOST)
+    parser.add_argument('--tasPort', default=DEFAULT_TAS_PORT)
+    parser.add_argument('--awsIotEndpoint', default=DEFAULT_AWS_IOT_ENDPOINT)
+    parser.add_argument('--awsIotPort', default=DEFAULT_AWS_IOT_PORT)
+    parser.add_argument('--awsIotTopic', default=DEFAULT_AWS_IOT_TOPIC)
+    parser.add_argument('--awsIotClientId', default=DEFAULT_AWS_IOT_CLIENT_ID)
     args = parser.parse_args()
 
     model_path = args.model
@@ -269,9 +353,13 @@ def main():
         else:  # hand_landmarker
             model_path = 'hand_landmarker.task'
 
-    run(model_path, int(args.numHands), float(args.minHandDetectionConfidence),
-        float(args.minHandPresenceConfidence), float(args.minTrackingConfidence),
-        int(args.cameraId), args.frameWidth, args.frameHeight, args.task)
+    publisher = create_publisher(args)
+    try:
+        run(model_path, int(args.numHands), float(args.minHandDetectionConfidence),
+            float(args.minHandPresenceConfidence), float(args.minTrackingConfidence),
+            int(args.cameraId), args.frameWidth, args.frameHeight, args.task, publisher)
+    finally:
+        publisher.close()
 
 
 if __name__ == '__main__':

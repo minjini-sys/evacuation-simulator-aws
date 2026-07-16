@@ -36,18 +36,18 @@ conf.useprotocol = 'http';
 conf.sim = 'disable'; 
 
 // build cse (Mobius 플랫폼 기본 설정 - 보통 그대로 둠)
-cse.host        = '158.179.161.105';
-cse.port        = '7579';
+cse.host        = process.env.MOBIUS_HOST || '158.179.161.105';
+cse.port        = process.env.MOBIUS_HTTP_PORT || '7579';
 cse.name        = 'Mobius';
 cse.id          = '/Mobius2';
-cse.mqttport    = '1883';
-cse.wsport      = '7577';
+cse.mqttport    = process.env.MOBIUS_MQTT_PORT || '1883';
+cse.wsport      = process.env.MOBIUS_WS_PORT || '7577';
 
 // ------------------------------------------------------------------
 // ▼▼▼ [학생 설계 구간 1] AE (Application Entity) 설정 ▼▼▼
 // AE는 여러분의 '프로젝트 이름'과 같습니다.
 // ------------------------------------------------------------------
-ae.name         = 'FacialEmo'; 
+ae.name         = process.env.MOBIUS_AE || 'FacialEmo'; 
 // [수정 가이드]
 // 위 'FacialEmo'를 여러분의 프로젝트 주제로 바꾸세요.
 // 예: 행동인식 프로젝트라면 -> 'Action_Project'
@@ -57,9 +57,9 @@ ae.name         = 'FacialEmo';
 ae.id           = 'S'+ae.name;
 ae.parent       = '/' + cse.name;
 ae.appid        = 'sonic_emotion';
-ae.port         = '9727';
+ae.port         = process.env.AE_HTTP_PORT || '9727';
 ae.bodytype     = 'json'; 
-ae.tasport      = '3105';
+ae.tasport      = process.env.TAS_PORT || '3105';
 
 // ------------------------------------------------------------------
 // ▼▼▼ [학생 설계 구간 2] CNT (Container) 설정 ▼▼▼
