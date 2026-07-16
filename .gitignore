@@ -24,6 +24,7 @@ venv/
 *.crt
 *.p12
 *.pfx
+certs/
 
 # =========================
 # 3) Python cache / compiled
@@ -120,6 +121,23 @@ cache/
 # =========================
 *.local
 config.local.*
+
+# =========================
+# 13) Terraform state / local plans
+# =========================
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+terraform.tfvars
 
 # =========================
 # 12) Chroma / RAG artifacts

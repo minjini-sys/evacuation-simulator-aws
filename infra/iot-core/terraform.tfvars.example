@@ -1,0 +1,12 @@
+aws_region = "ap-northeast-2"
+
+thing_name      = "gesture-recognition-client"
+gesture_topic   = "evacuation/gesture"
+iot_policy_name = "evacuation-simulator-iot-policy"
+
+allowed_client_ids = [
+  "gesture-recognition-client",
+  "minecraft-controller",
+]
+
+certificate_output_dir = "../../certs"

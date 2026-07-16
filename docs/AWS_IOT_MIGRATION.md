@@ -73,6 +73,22 @@ MQTT_KEY_PATH=../certs/private.pem.key
 5. Secrets Manager or Parameter Store values for RCON and API keys
 6. CloudWatch log collection for the controller
 
+## Terraform
+
+The first three items can be created with Terraform in [`infra/iot-core`](../infra/iot-core):
+
+```powershell
+cd C:\GitHub\evacuation-simulator-aws\infra\iot-core
+copy terraform.tfvars.example terraform.tfvars
+terraform init
+terraform plan
+terraform apply
+```
+
+The Terraform stack uses Seoul region (`ap-northeast-2`), creates the Thing `gesture-recognition-client`, and grants access to the topic `evacuation/gesture`.
+
+Terraform writes `AmazonRootCA1.pem`, `device.pem.crt`, `private.pem.key`, and `public.pem.key` to `certs/`.
+
 ## Portfolio summary
 
 The project improves the original fixed-IP Mobius relay architecture by adding an AWS IoT Core MQTT path. Gesture recognition remains at the edge for low latency and privacy, while gesture events can be routed through AWS with certificate-based authentication and environment-based configuration.

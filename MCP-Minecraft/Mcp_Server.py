@@ -51,6 +51,7 @@ MQTT_CERT_PATH = os.getenv("MQTT_CERT_PATH")
 MQTT_KEY_PATH = os.getenv("MQTT_KEY_PATH")
 MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "minecraft-controller")
 
 # MQTT Subscribe 토픽
 # Mobius가 브로드캐스트하는 notification 수신
@@ -154,6 +155,8 @@ gesture_lock = asyncio.Lock()
 def build_mqtt_client_kwargs():
     """Build aiomqtt connection options for plain MQTT or AWS IoT Core MQTT/TLS."""
     kwargs = {}
+    if MQTT_CLIENT_ID:
+        kwargs["identifier"] = MQTT_CLIENT_ID
     if MQTT_USERNAME:
         kwargs["username"] = MQTT_USERNAME
     if MQTT_PASSWORD:
