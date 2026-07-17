@@ -1,0 +1,21 @@
+aws_region = "ap-northeast-2"
+
+# Optional. Use this when your default AWS CLI profile is not the target account.
+# aws_profile = "minjin"
+
+# t3.small: light testing
+# t3.medium: safer for several players
+instance_type = "t3.small"
+
+minecraft_version = "1.21.8"
+
+# Restrict this to your current public IP when possible.
+# Example: ["203.0.113.10/32"]
+allowed_player_cidrs = ["0.0.0.0/0"]
+
+# Optional SSH access.
+# key_name  = "your-existing-ec2-keypair"
+# ssh_cidrs = ["203.0.113.10/32"]
+
+# Change this before terraform apply.
+rcon_password = "change-me"

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y curl jq openjdk-21-jre-headless
+
+useradd --system --home /opt/minecraft --shell /usr/sbin/nologin minecraft || true
+mkdir -p /opt/minecraft
+cd /opt/minecraft
+
+MANIFEST_URL="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+SERVER_URL="$(curl -fsSL "$MANIFEST_URL" \
+  | jq -r --arg version "${minecraft_version}" '.versions[] | select(.id == $version) | .url' \
+  | xargs curl -fsSL \
+  | jq -r '.downloads.server.url')"
+
+curl -fsSL "$SERVER_URL" -o server.jar
+
+cat > eula.txt <<'EULA'
+eula=true
+EULA
+
+cat > server.properties <<'PROPERTIES'
+enable-rcon=true
+rcon.port=${rcon_port}
+rcon.password=${rcon_password}
+server-port=${minecraft_port}
+online-mode=true
+motd=Evacuation Simulator on AWS
+level-name=world
+spawn-protection=0
+view-distance=6
+simulation-distance=4
+PROPERTIES
+
+cat > /etc/systemd/system/minecraft.service <<'SERVICE'
+[Unit]
+Description=Minecraft Java Server for Evacuation Simulator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=minecraft
+Group=minecraft
+WorkingDirectory=/opt/minecraft
+ExecStart=/usr/bin/java -Xms${memory_min} -Xmx${memory_max} -jar server.jar nogui
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+chown -R minecraft:minecraft /opt/minecraft
+
+systemctl daemon-reload
+systemctl enable minecraft
+systemctl start minecraft
