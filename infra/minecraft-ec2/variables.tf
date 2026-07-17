@@ -40,11 +40,10 @@ variable "rcon_port" {
   default     = 25575
 }
 
-variable "rcon_password" {
-  description = "Minecraft RCON password used by the MCP controller on the same EC2 instance."
+variable "rcon_password_parameter_name" {
+  description = "SSM SecureString parameter name containing the Minecraft RCON password."
   type        = string
-  sensitive   = true
-  default     = "change-me"
+  default     = "/evacuation-simulator/minecraft/rcon-password"
 }
 
 variable "allowed_player_cidrs" {
@@ -81,4 +80,46 @@ variable "server_memory_max" {
   description = "Maximum JVM heap size for Minecraft."
   type        = string
   default     = "1536M"
+}
+
+variable "mcp_repo_url" {
+  description = "Git repository URL cloned on EC2 for the MCP controller."
+  type        = string
+  default     = "https://github.com/minjini-sys/evacuation-simulator-aws.git"
+}
+
+variable "mcp_repo_branch" {
+  description = "Git branch cloned on EC2 for the MCP controller."
+  type        = string
+  default     = "codex/aws-iot-gesture-path"
+}
+
+variable "mcp_mqtt_topic" {
+  description = "AWS IoT MQTT topic subscribed by the MCP controller."
+  type        = string
+  default     = "evacuation/gesture"
+}
+
+variable "mcp_mqtt_client_id" {
+  description = "MQTT client ID used by the MCP controller."
+  type        = string
+  default     = "minecraft-controller"
+}
+
+variable "iot_ca_parameter_name" {
+  description = "SSM SecureString parameter name containing the AWS IoT root CA PEM."
+  type        = string
+  default     = "/evacuation-simulator/iot/amazon-root-ca"
+}
+
+variable "iot_cert_parameter_name" {
+  description = "SSM SecureString parameter name containing the AWS IoT device certificate PEM."
+  type        = string
+  default     = "/evacuation-simulator/iot/device-cert"
+}
+
+variable "iot_private_key_parameter_name" {
+  description = "SSM SecureString parameter name containing the AWS IoT private key PEM."
+  type        = string
+  default     = "/evacuation-simulator/iot/private-key"
 }

@@ -17,5 +17,9 @@ allowed_player_cidrs = ["0.0.0.0/0"]
 # key_name  = "your-existing-ec2-keypair"
 # ssh_cidrs = ["203.0.113.10/32"]
 
-# Change this before terraform apply.
-rcon_password = "change-me"
+# Sensitive runtime values are read by EC2 from SSM Parameter Store.
+# Do not put the actual RCON password or IoT private key in terraform.tfvars.
+rcon_password_parameter_name   = "/evacuation-simulator/minecraft/rcon-password"
+iot_ca_parameter_name          = "/evacuation-simulator/iot/amazon-root-ca"
+iot_cert_parameter_name        = "/evacuation-simulator/iot/device-cert"
+iot_private_key_parameter_name = "/evacuation-simulator/iot/private-key"

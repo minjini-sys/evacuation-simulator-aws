@@ -17,6 +17,10 @@ data "aws_vpc" "default" {
   default = true
 }
 
+data "aws_iot_endpoint" "data_ats" {
+  endpoint_type = "iot:Data-ATS"
+}
+
 resource "aws_security_group" "minecraft" {
   name        = "${var.project_name}-minecraft-sg"
   description = "Minecraft Java server access"
@@ -59,18 +63,28 @@ resource "aws_security_group" "minecraft" {
 resource "aws_instance" "minecraft" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
+  iam_instance_profile        = aws_iam_instance_profile.minecraft.name
   key_name                    = var.key_name
   vpc_security_group_ids      = [aws_security_group.minecraft.id]
   associate_public_ip_address = true
 
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    minecraft_version = var.minecraft_version
-    minecraft_port    = var.minecraft_port
-    rcon_port         = var.rcon_port
-    rcon_password     = var.rcon_password
-    memory_min        = var.server_memory_min
-    memory_max        = var.server_memory_max
+    aws_region                     = var.aws_region
+    minecraft_version              = var.minecraft_version
+    minecraft_port                 = var.minecraft_port
+    rcon_port                      = var.rcon_port
+    rcon_password_parameter_name   = var.rcon_password_parameter_name
+    memory_min                     = var.server_memory_min
+    memory_max                     = var.server_memory_max
+    mcp_repo_url                   = var.mcp_repo_url
+    mcp_repo_branch                = var.mcp_repo_branch
+    mcp_mqtt_host                  = data.aws_iot_endpoint.data_ats.endpoint_address
+    mcp_mqtt_topic                 = var.mcp_mqtt_topic
+    mcp_mqtt_client_id             = var.mcp_mqtt_client_id
+    iot_ca_parameter_name          = var.iot_ca_parameter_name
+    iot_cert_parameter_name        = var.iot_cert_parameter_name
+    iot_private_key_parameter_name = var.iot_private_key_parameter_name
   })
 
   root_block_device {
