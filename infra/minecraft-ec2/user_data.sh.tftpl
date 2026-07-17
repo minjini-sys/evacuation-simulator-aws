@@ -4,7 +4,13 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y awscli curl git jq openjdk-21-jre-headless python3-pip python3-venv
+apt-get install -y curl git jq openjdk-21-jre-headless python3-pip python3-venv unzip
+
+if ! command -v aws >/dev/null 2>&1; then
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+fi
 
 install -d -m 0755 /opt/evacuation
 install -d -m 0700 /opt/evacuation/certs
