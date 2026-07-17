@@ -55,6 +55,7 @@ logs/
 *.tmp
 *.temp
 *.swp
+.runtime/
 
 # =========================
 # 6) OS / Editor
