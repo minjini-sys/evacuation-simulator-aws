@@ -24,6 +24,11 @@ This first step provisions the Minecraft server itself. The MCP controller can t
 - Encrypted gp3 root EBS volume
 - cloud-init user data that installs Java 21 and Minecraft server `1.21.8`
 - systemd service: `minecraft.service`
+- CloudWatch Dashboard
+  - CPU utilization
+  - Network In/Out
+  - EC2 status checks
+  - Minecraft connection address summary
 
 ## Cost Notes
 
@@ -56,6 +61,7 @@ After apply:
 
 ```powershell
 terraform output minecraft_server_address
+terraform output cloudwatch_dashboard_url
 ```
 
 Use that value in Minecraft Java Edition:
@@ -63,6 +69,8 @@ Use that value in Minecraft Java Edition:
 ```text
 Multiplayer -> Direct Connection -> <public-ip>:25565
 ```
+
+Open the CloudWatch dashboard URL to monitor the EC2 server while the test is running.
 
 ## RCON
 
