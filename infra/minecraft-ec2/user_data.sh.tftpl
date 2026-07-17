@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y curl git jq openjdk-21-jre-headless python3-pip python3-venv unzip
+
+if ! command -v aws >/dev/null 2>&1; then
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+fi
+
+install -d -m 0755 /opt/evacuation
+install -d -m 0700 /opt/evacuation/certs
+
+ssm_value() {
+  aws ssm get-parameter \
+    --region "${aws_region}" \
+    --name "$1" \
+    --with-decryption \
+    --query 'Parameter.Value' \
+    --output text
+}
+
+RCON_PASSWORD="$(ssm_value "${rcon_password_parameter_name}")"
+ssm_value "${iot_ca_parameter_name}" > /opt/evacuation/certs/AmazonRootCA1.pem
+ssm_value "${iot_cert_parameter_name}" > /opt/evacuation/certs/device.pem.crt
+ssm_value "${iot_private_key_parameter_name}" > /opt/evacuation/certs/private.pem.key
+chmod 0600 /opt/evacuation/certs/private.pem.key
+chmod 0644 /opt/evacuation/certs/AmazonRootCA1.pem /opt/evacuation/certs/device.pem.crt
+
+useradd --system --home /opt/minecraft --shell /usr/sbin/nologin minecraft || true
+mkdir -p /opt/minecraft
+cd /opt/minecraft
+
+MANIFEST_URL="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+SERVER_URL="$(curl -fsSL "$MANIFEST_URL" \
+  | jq -r --arg version "${minecraft_version}" '.versions[] | select(.id == $version) | .url' \
+  | xargs curl -fsSL \
+  | jq -r '.downloads.server.url')"
+
+curl -fsSL "$SERVER_URL" -o server.jar
+
+cat > eula.txt <<'EULA'
+eula=true
+EULA
+
+cat > server.properties <<PROPERTIES
+enable-rcon=true
+rcon.port=${rcon_port}
+rcon.password=$RCON_PASSWORD
+server-port=${minecraft_port}
+online-mode=true
+motd=Evacuation Simulator on AWS
+level-name=world
+spawn-protection=0
+view-distance=6
+simulation-distance=4
+PROPERTIES
+
+cat > /etc/systemd/system/minecraft.service <<'SERVICE'
+[Unit]
+Description=Minecraft Java Server for Evacuation Simulator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=minecraft
+Group=minecraft
+WorkingDirectory=/opt/minecraft
+ExecStart=/usr/bin/java -Xms${memory_min} -Xmx${memory_max} -jar server.jar nogui
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+chown -R minecraft:minecraft /opt/minecraft
+
+systemctl daemon-reload
+systemctl enable minecraft
+systemctl start minecraft
+
+useradd --system --home /opt/evacuation --shell /usr/sbin/nologin evacuation || true
+cd /opt/evacuation
+git clone --branch "${mcp_repo_branch}" --depth 1 "${mcp_repo_url}" app
+
+cd /opt/evacuation/app/MCP-Minecraft
+python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -r requirements.server.txt
+
+cat > .env <<ENV
+MQTT_HOST=${mcp_mqtt_host}
+MQTT_PORT=8883
+MQTT_SUB_TOPIC=${mcp_mqtt_topic}
+MQTT_USE_TLS=true
+MQTT_CLIENT_ID=${mcp_mqtt_client_id}
+MQTT_CA_PATH=/opt/evacuation/certs/AmazonRootCA1.pem
+MQTT_CERT_PATH=/opt/evacuation/certs/device.pem.crt
+MQTT_KEY_PATH=/opt/evacuation/certs/private.pem.key
+
+MC_HOST=localhost
+MC_RCON_PORT=${rcon_port}
+MC_RCON_PASSWORD=$RCON_PASSWORD
+FLASK_API=http://localhost:5000/get_chats
+GOOGLE_API_KEY=dummy
+ENV
+
+chown -R evacuation:evacuation /opt/evacuation
+chmod 0600 /opt/evacuation/app/MCP-Minecraft/.env
+
+cat > /etc/systemd/system/mcp-minecraft.service <<'SERVICE'
+[Unit]
+Description=Evacuation Simulator MCP Minecraft Controller
+After=network-online.target minecraft.service
+Wants=network-online.target
+Requires=minecraft.service
+
+[Service]
+User=evacuation
+Group=evacuation
+WorkingDirectory=/opt/evacuation/app/MCP-Minecraft
+ExecStart=/opt/evacuation/app/MCP-Minecraft/.venv/bin/python /opt/evacuation/app/MCP-Minecraft/Mcp_Server.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable mcp-minecraft
+systemctl start mcp-minecraft

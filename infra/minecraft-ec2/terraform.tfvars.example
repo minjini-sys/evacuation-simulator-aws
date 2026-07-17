@@ -1,0 +1,25 @@
+aws_region = "ap-northeast-2"
+
+# Optional. Use this when your default AWS CLI profile is not the target account.
+# aws_profile = "minjin"
+
+# t3.small: light testing
+# t3.medium: safer for several players
+instance_type = "t3.small"
+
+minecraft_version = "1.21.8"
+
+# Restrict this to your current public IP when possible.
+# Example: ["203.0.113.10/32"]
+allowed_player_cidrs = ["0.0.0.0/0"]
+
+# Optional SSH access.
+# key_name  = "your-existing-ec2-keypair"
+# ssh_cidrs = ["203.0.113.10/32"]
+
+# Sensitive runtime values are read by EC2 from SSM Parameter Store.
+# Do not put the actual RCON password or IoT private key in terraform.tfvars.
+rcon_password_parameter_name   = "/evacuation-simulator/minecraft/rcon-password"
+iot_ca_parameter_name          = "/evacuation-simulator/iot/amazon-root-ca"
+iot_cert_parameter_name        = "/evacuation-simulator/iot/device-cert"
+iot_private_key_parameter_name = "/evacuation-simulator/iot/private-key"
