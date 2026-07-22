@@ -1,6 +1,6 @@
 # Evacuation Simulator AWS Migration
 
-Minecraft 기반 재난 대피 시뮬레이터의 제스처 전달 구조를 분석하고, 기존 TAS/Mobius 중심 흐름을 AWS IoT Core 기반 MQTT 흐름으로 개선한 프로젝트입니다.
+Minecraft 기반 재난 대피 시뮬레이터의 제스처 전달 구조를 분석하고, 기존 TAS/Mobius 중심 흐름을 AWS IoT Core 기반 MQTT 흐름으로 개선한 프로젝트입니다..
 
 원본 프로젝트는 웹캠 제스처 인식, Mobius 서버, MQTT, Minecraft RCON, RAG 챗봇이 결합된 구조입니다. 이 fork에서는 제스처 이벤트 전달 경로와 Minecraft 서버 운영 환경을 AWS 기반으로 재설계하는 데 집중했습니다.
 
